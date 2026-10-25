@@ -26,8 +26,9 @@ import {
   Image as ImageIcon,
   Lock,
   LogIn,
-  FolderHeart,
-  RotateCcw
+  RotateCcw,
+  Edit2,
+  Edit3
 } from 'lucide-react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import RoomQuoteModal from '../components/RoomQuoteModal';
@@ -95,6 +96,7 @@ export default function CustomerStudio({
   const [selectedPinId, setSelectedPinId] = useState(null);
   const [showPins, setShowPins] = useState(true);
   const [addPinMode, setAddPinMode] = useState(false);
+  const [isEditingPinName, setIsEditingPinName] = useState(false);
 
   // Version History State
   const [versionHistory, setVersionHistory] = useState([]);
@@ -809,8 +811,9 @@ export default function CustomerStudio({
 
     setComponentPins(prev => [...prev, newPin]);
     setSelectedPinId(newPin.id);
+    setIsEditingPinName(true);
     setAddPinMode(false);
-    setStatusBanner(`🎯 Added "${newPin.name}". Now pick what to stage!`);
+    setStatusBanner(`🎯 Added "${newPin.name}". Click to edit name or adjust bounding box!`);
   };
 
   const showLoading = (title, subtitle) => {
@@ -1056,14 +1059,14 @@ export default function CustomerStudio({
 
             {currentRoomUrl && (
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                <label className="hidden sm:flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
                   <input
                     type="checkbox"
                     checked={showPins}
                     onChange={(e) => setShowPins(e.target.checked)}
                     className="rounded accent-indigo-600"
                   />
-                  <span>Tags</span>
+                  <span className="font-semibold">Boxes & Tags</span>
                 </label>
                 <button
                   onClick={() => runSpatialVisionAnalysis()}
@@ -1213,7 +1216,7 @@ export default function CustomerStudio({
                   </div>
                 </div>
 
-                {/* Interactive Pins Container */}
+                {/* Interactive Pins & Bounding Boxes Container */}
                 <div
                   ref={pinsContainerRef}
                   className={`absolute inset-0 pointer-events-auto z-30 ${
@@ -1222,23 +1225,59 @@ export default function CustomerStudio({
                 >
                   {componentPins.map((pin) => {
                     const isSelected = pin.id === selectedPinId;
+                    const w = pin.boxW || 34;
+                    const h = pin.boxH || 22;
                     return (
-                      <div
-                        key={pin.id}
-                        onPointerDown={(e) => handlePinPointerDown(e, pin)}
-                        className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-extrabold flex items-center gap-1.5 shadow-xl transition-all select-none ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white ring-4 ring-indigo-500/40 scale-110 z-40'
-                            : 'bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 hover:scale-105'
-                        }`}
-                        style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
-                      >
-                        <span
-                          className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-400 animate-pulse' : 'bg-indigo-600'}`}
-                        />
-                        <span>{pin.name}</span>
-                        <span className="text-[9px] opacity-60">✥</span>
-                      </div>
+                      <React.Fragment key={pin.id}>
+                        {/* 1. Architectural Bounding Box */}
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPinId(pin.id);
+                          }}
+                          className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer ${
+                            isSelected
+                              ? 'border-2 border-dashed border-indigo-500 bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.35)] ring-1 ring-white/50 z-35'
+                              : 'border border-dashed border-white/60 dark:border-white/40 bg-slate-900/10 hover:border-indigo-400 hover:bg-indigo-500/10 z-25'
+                          }`}
+                          style={{
+                            left: `${pin.x}%`,
+                            top: `${pin.y}%`,
+                            width: `${w}%`,
+                            height: `${h}%`
+                          }}
+                        >
+                          {/* Corner bounding accents */}
+                          <div className={`absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
+                          <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
+                          <div className={`absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
+                          <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
+                          
+                          {/* Dimension label tag (shown when selected) */}
+                          {isSelected && (
+                            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950/80 backdrop-blur-md text-[9px] font-mono font-bold text-amber-300 whitespace-nowrap shadow select-none">
+                              {w}% × {h}%
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Interactive Pin Tag Button */}
+                        <div
+                          onPointerDown={(e) => handlePinPointerDown(e, pin)}
+                          className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-extrabold flex items-center gap-1.5 shadow-xl transition-all select-none pointer-events-auto ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white ring-4 ring-indigo-500/40 scale-110 z-40'
+                              : 'bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 hover:scale-105 z-30'
+                          }`}
+                          style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-400 animate-pulse' : 'bg-indigo-600'}`}
+                          />
+                          <span className="max-w-[120px] sm:max-w-[160px] truncate">{pin.name}</span>
+                          <span className="text-[9px] opacity-60">✥</span>
+                        </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -1361,12 +1400,15 @@ export default function CustomerStudio({
                     </span>
                   </div>
 
-                  {/* Spot Selector Dropdown */}
+                  {/* Spot Selector Dropdown & Delete */}
                   <div className="flex items-center gap-1">
                     <select
                       value={selectedPin.id}
-                      onChange={(e) => setSelectedPinId(e.target.value)}
-                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-600"
+                      onChange={(e) => {
+                        setSelectedPinId(e.target.value);
+                        setIsEditingPinName(false);
+                      }}
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-600 max-w-[150px] truncate"
                     >
                       {componentPins.map(p => (
                         <option key={p.id} value={p.id}>
@@ -1381,6 +1423,7 @@ export default function CustomerStudio({
                           const remaining = componentPins.filter(p => p.id !== selectedPin.id);
                           setComponentPins(remaining);
                           setSelectedPinId(remaining[0].id);
+                          setIsEditingPinName(false);
                         }}
                         className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
                         title="Delete spot tag"
@@ -1389,6 +1432,63 @@ export default function CustomerStudio({
                       </button>
                     )}
                   </div>
+                </div>
+
+                {/* Spot Name In-Place Editor */}
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/90 shadow-sm flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Spot Label & Role</span>
+                    <button
+                      onClick={() => setIsEditingPinName(!isEditingPinName)}
+                      className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      {isEditingPinName ? (
+                        <>
+                          <Check size={12} />
+                          <span>Done</span>
+                        </>
+                      ) : (
+                        <>
+                          <Edit2 size={12} />
+                          <span>Rename Spot</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {isEditingPinName ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        autoFocus
+                        value={selectedPin.name}
+                        onChange={(e) => {
+                          const newName = e.target.value;
+                          setComponentPins(prev =>
+                            prev.map(p => (p.id === selectedPin.id ? { ...p, name: newName } : p))
+                          );
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') setIsEditingPinName(false);
+                        }}
+                        placeholder="e.g. Master Velvet Sofa, Reading Corner Armchair"
+                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-indigo-400 dark:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none ring-2 ring-indigo-500/20"
+                      />
+                      <button
+                        onClick={() => setIsEditingPinName(false)}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0 hover:bg-indigo-700 transition-colors"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                      <span className="truncate">{selectedPin.name}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase shrink-0">
+                        {selectedPin.category}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Spot Dimensions Tuning */}
