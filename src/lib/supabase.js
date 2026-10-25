@@ -10,15 +10,44 @@ export const supabaseUrl = rawUrl.startsWith('http')
   ? `https://${rawUrl}.supabase.co`
   : 'https://urbfdlljbzfsgtvyhuko.supabase.co';
 
-export const supabaseAnonKey = rawAnonKey || '';
+export const supabaseAnonKey = 
+  rawAnonKey || 
+  'sb_publishable_p_kzy8hKEmXpKZ783zsYnw_GFGoeI5z' ||
+  'sb_publishable_placeholder_key';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
+function createSafeSupabaseClient() {
+  try {
+    const key = supabaseAnonKey || 'sb_publishable_placeholder_key';
+    return createClient(supabaseUrl, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  } catch (err) {
+    console.warn('Supabase initialization warning:', err);
+    return {
+      from: () => ({
+        select: () => Promise.resolve({ data: [], error: null }),
+        insert: () => Promise.resolve({ data: null, error: null }),
+        update: () => Promise.resolve({ data: null, error: null }),
+        delete: () => Promise.resolve({ data: null, error: null })
+      }),
+      storage: {
+        from: () => ({
+          upload: () => Promise.resolve({ data: null, error: null }),
+          getPublicUrl: () => ({ data: { publicUrl: '' } })
+        })
+      },
+      functions: {
+        invoke: () => Promise.resolve({ data: null, error: new Error('Edge functions offline') })
+      }
+    };
   }
-});
+}
+
+export const supabase = createSafeSupabaseClient();
 
 /**
  * Uploads a base64 or blob image to Supabase Storage

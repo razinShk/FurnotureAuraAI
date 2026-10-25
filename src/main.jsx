@@ -5,7 +5,9 @@ import { ThemeProvider } from './context/ThemeContext';
 import App from './App.jsx';
 import './index.css';
 
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || '';
+const clerkPubKey = 
+  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || 
+  'pk_test_c3BsZW5kaWQtdGFkcG9sZS05ODcuY2xlcmsuYWNjb3VudHMuZGV2JA';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

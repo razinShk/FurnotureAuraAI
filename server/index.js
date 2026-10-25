@@ -897,19 +897,23 @@ app.post('/api/settings/keys', (req, res) => {
   });
 });
 
-// Start Server with graceful error handling
-const server = app.listen(PORT, () => {
-  console.log(`✨ AuraRoom AI Server running on http://localhost:${PORT}`);
-  console.log(`📡 Replicate API Key configured: ${process.env.replicate_api_key ? 'YES (r8_...)' : 'NO'}`);
-  console.log(`🔑 Clerk Publishable Key configured: ${process.env.VITE_CLERK_PUBLISHABLE_KEY ? 'YES' : 'NO'}`);
-  console.log(`✨ Gemini API Key configured: ${process.env.GEMINI_API_KEY ? 'YES' : 'NO'}`);
-});
+// Start Server with graceful error handling if not running as serverless function
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`✨ AuraRoom AI Server running on http://localhost:${PORT}`);
+    console.log(`📡 Replicate API Key configured: ${process.env.replicate_api_key ? 'YES (r8_...)' : 'NO'}`);
+    console.log(`🔑 Clerk Publishable Key configured: ${process.env.VITE_CLERK_PUBLISHABLE_KEY ? 'YES' : 'NO'}`);
+    console.log(`✨ Gemini API Key configured: ${process.env.GEMINI_API_KEY ? 'YES' : 'NO'}`);
+  });
 
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`⚠️ Port ${PORT} is currently in use. Please terminate existing process or use another port.`);
-  } else {
-    console.error('Server error:', err);
-  }
-});
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`⚠️ Port ${PORT} is currently in use. Please terminate existing process or use another port.`);
+    } else {
+      console.error('Server error:', err);
+    }
+  });
+}
+
+export default app;
 
