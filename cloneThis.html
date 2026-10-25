@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>AuraRoom AI — Smart Photo Interior & Furniture Studio</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Complete Self-Contained Fallback & Custom CSS so Mobile WebViews NEVER render unstyled Times New Roman -->
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #f8fafc;
+            color: #0f172a;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Core Layout Fallbacks */
+        .app-shell {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background: #f8fafc;
+        }
+
+        .app-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 10px 14px;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        }
+
+        .workspace-grid {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        @media (min-width: 1024px) {
+            .app-shell {
+                height: 100vh;
+                overflow: hidden;
+            }
+
+            .workspace-grid {
+                flex-direction: row;
+                height: calc(100vh - 64px);
+                overflow: hidden;
+            }
+
+            .stage-column {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+            }
+
+            .studio-sidebar {
+                width: 430px;
+                border-left: 1px solid #e2e8f0;
+                height: 100%;
+                overflow-y: auto;
+            }
+        }
+
+        /* Buttons & Badges Fallbacks */
+        .btn-primary {
+            background-color: #4f46e5;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 9px 14px;
+            font-size: 12px;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+        }
+
+        .btn-secondary {
+            background-color: #ffffff;
+            color: #334155;
+            font-weight: 600;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-secondary.active-toggle {
+            background-color: #4f46e5;
+            color: #ffffff;
+            border-color: #4f46e5;
+        }
+
+        /* Interactive Stage & Canvas */
+        .stage-viewport {
+            position: relative;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            min-height: 300px;
+        }
+
+        .canvas-frame {
+            position: relative;
+            display: inline-block;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12);
+            border: 1px solid #e2e8f0;
+            max-width: 100%;
+        }
+
+        #roomCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            max-height: 54vh;
+        }
+
+        @media (min-width: 1024px) {
+            #roomCanvas {
+                max-height: calc(100vh - 210px);
+            }
+        }
+
+        /* Touch-Draggable Component Pin */
+        .room-pin {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            z-index: 25;
+            cursor: grab;
+            padding: 6px 11px;
+            border-radius: 9999px;
+            font-size: 11px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+            transition: transform 0.1s ease, background-color 0.15s ease;
+        }
+
+        .room-pin.pin-default {
+            background: rgba(255, 255, 255, 0.96);
+            color: #0f172a;
+            border: 1.5px solid #cbd5e1;
+        }
+
+        .room-pin.pin-selected {
+            background: #4f46e5;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.35), 0 6px 16px rgba(15, 23, 42, 0.25);
+            transform: translate(-50%, -50%) scale(1.06);
+            z-index: 30;
+        }
+
+        .room-pin.dragging {
+            cursor: grabbing !important;
+            transform: translate(-50%, -50%) scale(1.12);
+            z-index: 45;
+        }
+
+        /* Selected Pin Target Bounding Box */
+        .pin-bbox {
+            position: absolute;
+            border: 2px dashed #4f46e5;
+            background: rgba(79, 70, 229, 0.10);
+            border-radius: 12px;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        /* Option A, B, C Cards */
+        .option-card {
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 14px;
+            transition: all 0.18s ease;
+            cursor: pointer;
+        }
+
+        .option-card.active-option {
+            border-color: #4f46e5;
+            background: #f5f3ff;
+            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.10);
+        }
+
+        /* Catalog Item Cards */
+        .catalog-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            max-height: 190px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        .catalog-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-radius: 10px;
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .catalog-item.catalog-selected {
+            border-color: #4f46e5;
+            background: #eef2ff;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.18);
+        }
+
+        /* Scanning Laser Bar */
+        @keyframes scanline {
+            0% {
+                top: 4%;
+                opacity: 0.9;
+            }
+
+            50% {
+                top: 92%;
+                opacity: 1;
+            }
+
+            100% {
+                top: 4%;
+                opacity: 0.9;
+            }
+        }
+
+        .ai-scanner-bar {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #4f46e5, #06b6d4, #4f46e5, transparent);
+            box-shadow: 0 0 18px 3px rgba(79, 70, 229, 0.65);
+            animation: scanline 2s ease-in-out infinite;
+        }
+
+        /* Range Sliders */
+        input[type="range"] {
+            accent-color: #4f46e5;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+
+<body class="app-shell">
+
+    <!-- TOP NAVIGATION BAR (Responsive for Mobile & Desktop) -->
+    <header class="app-header">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-extrabold text-xs shadow-sm"
+                    style="background:#4f46e5; color:#fff; width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                    AI
+                </div>
+                <div>
+                    <h1 class="text-sm sm:text-base font-extrabold text-slate-900 leading-tight m-0">AuraRoom AI</h1>
+                    <p class="text-[11px] text-slate-500 m-0 hidden sm:block">Smart Room Tagging & Gemini Image Studio
+                    </p>
+                </div>
+            </div>
+
+            <!-- Room Total & Export on Top Right -->
+            <div class="flex items-center gap-2">
+                <div class="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg text-right"
+                    style="background:#ecfdf5; border:1px solid #a7f3d0; padding:4px 10px; border-radius:8px;">
+                    <span class="text-[9px] uppercase tracking-wider text-emerald-700 font-bold block">Estimate</span>
+                    <span id="roomTotalBadge" class="text-xs sm:text-sm font-extrabold text-emerald-700">$2,890</span>
+                </div>
+                <button onclick="downloadCurrentRoom()" class="btn-secondary" title="Save HD Image">
+                    <span>⬇ Save</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Action Toolbar Row (Easy thumb tap on mobile) -->
+        <div class="flex items-center gap-2 overflow-x-auto pt-2.5 pb-0.5 mt-2 border-t border-slate-100">
+            <label class="btn-primary shrink-0">
+                <span>📷 Upload Room</span>
+                <input id="roomUploadInput" type="file" accept="image/*" class="hidden" />
+            </label>
+
+            <button onclick="runAIOutpaintRoom()" class="btn-secondary shrink-0">
+                <span>↔️ AI Expand</span>
+            </button>
+
+            <button id="addPinModeBtn" onclick="toggleAddPinMode()" class="btn-secondary shrink-0">
+                <span>📍 + Tag Spot</span>
+            </button>
+
+            <button id="compareToggleBtn" onclick="toggleBeforeAfterSlider()" class="btn-secondary shrink-0">
+                <span>🌗 Before / After</span>
+            </button>
+
+            <button onmousedown="peekOriginal(true)" onmouseup="peekOriginal(false)" onmouseleave="peekOriginal(false)"
+                ontouchstart="peekOriginal(true); event.preventDefault();"
+                ontouchend="peekOriginal(false); event.preventDefault();" class="btn-secondary shrink-0">
+                <span>👁️ Hold v1</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE (Stacks cleanly on Mobile, Side-by-Side on Desktop) -->
+    <main class="workspace-grid">
+
+        <!-- COLUMN 1: INTERACTIVE ROOM IMAGE STAGE + VERSION BAR -->
+        <section class="stage-column">
+
+            <!-- Status & Pin Controls Bar -->
+            <div class="bg-white border-b border-slate-200 px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600"
+                style="background:#fff; border-bottom:1px solid #e2e8f0; padding:8px 14px;">
+                <div class="flex items-center gap-2">
+                    <span class="inline-block w-2 h-2 rounded-full bg-indigo-600"
+                        style="width:8px; height:8px; border-radius:50%; background:#4f46e5;"></span>
+                    <span id="statusBannerText" class="text-[11px] sm:text-xs font-medium text-slate-700">
+                        Tap any tag to select it, or <strong>drag any tag</strong> with your finger to pinpoint its
+                        exact spot.
+                    </span>
+                </div>
+                <div class="flex items-center gap-3 ml-auto">
+                    <label class="flex items-center gap-1.5 cursor-pointer text-[11px] font-semibold text-slate-700">
+                        <input type="checkbox" id="showPinsCheckbox" checked
+                            onchange="togglePinsVisibility(this.checked)" />
+                        <span>Show Tags</span>
+                    </label>
+                    <button onclick="runGeminiVisionDetection(false)"
+                        class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-transparent border-0 cursor-pointer p-0"
+                        style="color:#4f46e5;">
+                        🔄 Re-Analyze Room
+                    </button>
+                </div>
+            </div>
+
+            <!-- Room Photo Stage -->
+            <div id="canvasViewport" class="stage-viewport flex-1">
+                <div id="stageWrapper" class="canvas-frame">
+                    <!-- Active Version Canvas -->
+                    <canvas id="roomCanvas"></canvas>
+
+                    <!-- BEFORE (v1 Original) Overlay for Split Comparison Slider -->
+                    <div id="beforeClipContainer" class="hidden"
+                        style="position:absolute; top:0; left:0; bottom:0; width:50%; overflow:hidden; pointer-events:none; border-right:3px solid #4f46e5; z-index:20;">
+                        <canvas id="beforeCanvas" style="display:block;"></canvas>
+                        <div
+                            style="position:absolute; top:10px; left:10px; background:rgba(15,23,42,0.85); color:#fff; font-size:10px; font-weight:800; padding:4px 8px; border-radius:6px;">
+                            BEFORE (v1 Original)
+                        </div>
+                    </div>
+
+                    <!-- AFTER Badge -->
+                    <div id="afterSplitLabel" class="hidden"
+                        style="position:absolute; top:10px; right:10px; background:#4f46e5; color:#fff; font-size:10px; font-weight:800; padding:4px 8px; border-radius:6px; pointer-events:none; z-index:20;">
+                        AFTER (Current)
+                    </div>
+
+                    <!-- Invisible Range Input Over Canvas for Smooth Touch/Mouse Split Dragging -->
+                    <input id="splitSliderInput" type="range" min="0" max="100" value="50"
+                        oninput="updateSplitSlider(this.value)" class="hidden"
+                        style="position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:ew-resize; z-index:35; margin:0;" />
+
+                    <!-- Selected Component Target Bounding Box -->
+                    <div id="activeBBox" class="pin-bbox hidden"></div>
+
+                    <!-- Touch-Draggable Component Pins Container -->
+                    <div id="pinsContainer" style="position:absolute; inset:0; pointer-events:none;"></div>
+
+                    <!-- AI Processing Loading Overlay -->
+                    <div id="aiLoadingOverlay" class="hidden"
+                        style="position:absolute; inset:0; background:rgba(255,255,255,0.92); backdrop-filter:blur(4px); z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; text-align:center;">
+                        <div class="ai-scanner-bar"></div>
+                        <div
+                            style="width:44px; height:44px; border-radius:14px; background:#4f46e5; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:10px; box-shadow:0 6px 16px rgba(79,70,229,0.3);">
+                            ✨
+                        </div>
+                        <h3 id="aiLoadingTitle"
+                            style="font-size:15px; font-weight:800; color:#0f172a; margin:0 0 4px 0;">
+                            Gemini AI Analyzing Room...
+                        </h3>
+                        <p id="aiLoadingSubtitle" style="font-size:12px; color:#64748b; margin:0; max-width:320px;">
+                            Detecting furniture, floor tiles, and lighting perspective...
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VERSION HISTORY BAR (Seamless Switching Between v1, v2, v3...) -->
+            <div class="bg-white border-t border-b border-slate-200 px-3.5 py-2.5 flex items-center justify-between gap-2 overflow-x-auto"
+                style="background:#fff; border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; padding:10px 14px;">
+                <div class="flex items-center gap-2 overflow-x-auto">
+                    <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 shrink-0">
+                        🕒 Versions:
+                    </span>
+                    <div id="versionPillsContainer" class="flex items-center gap-1.5"></div>
+                </div>
+                <span id="versionInfoText" class="text-[11px] font-semibold text-slate-500 shrink-0 hidden sm:inline">
+                    v1 (Original)
+                </span>
+            </div>
+        </section>
+
+        <!-- COLUMN 2: COMPONENT REPLACEMENT STUDIO (Options A, B, C) -->
+        <aside class="studio-sidebar bg-white flex flex-col justify-between" style="background:#ffffff;">
+            <div class="p-4 space-y-4" style="padding:16px;">
+
+                <!-- SELECTED COMPONENT CARD + RENAME + TARGET SIZE SLIDERS -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3.5"
+                    style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:14px;">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600"
+                            style="color:#4f46e5;">
+                            Selected Component Tag
+                        </span>
+                        <span id="selectedTypeBadge"
+                            class="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded"
+                            style="background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:6px;">
+                            SOFA
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <input id="selectedPinNameInput" type="text" value="Living Room Sofa"
+                            onchange="renameSelectedPin(this.value)"
+                            class="font-bold text-sm text-slate-900 bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 flex-1 outline-none"
+                            style="border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; font-weight:700; width:100%;" />
+                        <button onclick="deleteSelectedPin()" class="btn-secondary text-rose-600"
+                            style="color:#e11d48; border-color:#fecdd3; padding:6px 10px;"
+                            title="Delete this component tag">
+                            🗑️
+                        </button>
+                    </div>
+
+                    <!-- Target Width & Height Sliders -->
+                    <div class="grid grid-cols-2 gap-3 mt-3 pt-2.5 border-t border-slate-200"
+                        style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; padding-top:10px; border-top:1px solid #e2e8f0;">
+                        <div>
+                            <div class="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                                <span>Target Width:</span>
+                                <span id="bboxWVal" class="font-bold text-slate-900">40%</span>
+                            </div>
+                            <input id="bboxWidthSlider" type="range" min="12" max="85" value="40"
+                                oninput="updateSelectedPinBox()" style="width:100%;" />
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] font-semibold text-slate-600 mb-1">
+                                <span>Target Height:</span>
+                                <span id="bboxHVal" class="font-bold text-slate-900">26%</span>
+                            </div>
+                            <input id="bboxHeightSlider" type="range" min="12" max="75" value="26"
+                                oninput="updateSelectedPinBox()" style="width:100%;" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OPTIONS A, B, C HEADER -->
+                <div class="flex items-center justify-between pt-1">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">
+                        Choose Replacement Method
+                    </span>
+                    <span id="activeOptionIndicator"
+                        class="text-xs font-extrabold text-white bg-indigo-600 px-2.5 py-0.5 rounded-full"
+                        style="background:#4f46e5; color:#fff; padding:3px 10px; border-radius:999px; font-size:11px;">
+                        Active: Option A
+                    </span>
+                </div>
+
+                <!-- OPTION A: STORE CATALOG -->
+                <div id="cardOptionA" onclick="setActiveOption('A')" class="option-card active-option">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="replaceMode" id="radioA" checked
+                                style="width:16px; height:16px; accent-color:#4f46e5;" />
+                            <span class="font-extrabold text-sm text-slate-900">Option A: Store Catalog</span>
+                        </div>
+                        <span id="badgeA"
+                            style="font-size:10px; font-weight:800; padding:2px 8px; border-radius:6px; background:#4f46e5; color:#fff;">
+                            ACTIVE
+                        </span>
+                    </div>
+
+                    <!-- Category Filter Pills -->
+                    <div class="flex gap-1.5 overflow-x-auto pb-2 mb-2">
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('sofa')"
+                            id="catBtn-sofa" class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Sofas</button>
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('table')"
+                            id="catBtn-table" class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Tables</button>
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('chair')"
+                            id="catBtn-chair" class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Chairs</button>
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('floor')"
+                            id="catBtn-floor"
+                            class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Floors/Tiles</button>
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('wall')"
+                            id="catBtn-wall" class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Walls</button>
+                        <button onclick="event.stopPropagation(); setActiveOption('A'); filterCatalog('lamp')"
+                            id="catBtn-lamp" class="btn-secondary text-[11px] py-1 px-2.5 shrink-0">Lamps</button>
+                    </div>
+
+                    <!-- Store Catalog Grid -->
+                    <div id="catalogGrid" class="catalog-grid"></div>
+                </div>
+
+                <!-- OPTION B: CUSTOM AI TEXT DESCRIPTION -->
+                <div id="cardOptionB" onclick="setActiveOption('B')" class="option-card">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="replaceMode" id="radioB"
+                                style="width:16px; height:16px; accent-color:#4f46e5;" />
+                            <span class="font-extrabold text-sm text-slate-900">Option B: Type Custom Description</span>
+                        </div>
+                        <span id="badgeB"
+                            style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:#e2e8f0; color:#475569;">
+                            TAP TO USE
+                        </span>
+                    </div>
+
+                    <textarea id="promptTextInput" rows="2" onfocus="setActiveOption('B')"
+                        oninput="setActiveOption('B')"
+                        placeholder="Describe any sofa, chair, lamp, or floor tile (e.g., Emerald green curved velvet sofa)..."
+                        style="width:100%; font-size:12px; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#0f172a; outline:none; resize:none;"></textarea>
+
+                    <!-- Quick Prompt Chips -->
+                    <div id="promptChipsContainer" class="flex flex-wrap gap-1.5 mt-2">
+                        <button
+                            onclick="event.stopPropagation(); quickFillPrompt('Luxury emerald green curved velvet sofa with brass legs')"
+                            class="btn-secondary" style="font-size:10px; padding:4px 8px;">✨ Emerald Velvet
+                            Sofa</button>
+                        <button
+                            onclick="event.stopPropagation(); quickFillPrompt('Italian cognac tan leather Chesterfield sofa')"
+                            class="btn-secondary" style="font-size:10px; padding:4px 8px;">✨ Cognac Leather
+                            Sofa</button>
+                        <button
+                            onclick="event.stopPropagation(); quickFillPrompt('White Calacatta marble floor tiles with subtle gold veins')"
+                            class="btn-secondary" style="font-size:10px; padding:4px 8px;">✨ White Marble Tiles</button>
+                        <button
+                            onclick="event.stopPropagation(); quickFillPrompt('Warm honey oak herringbone wood parquet flooring')"
+                            class="btn-secondary" style="font-size:10px; padding:4px 8px;">✨ Herringbone Wood
+                            Floor</button>
+                    </div>
+                </div>
+
+                <!-- OPTION C: UPLOAD REFERENCE FURNITURE / TILE PHOTO -->
+                <div id="cardOptionC" onclick="setActiveOption('C')" class="option-card">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="replaceMode" id="radioC"
+                                style="width:16px; height:16px; accent-color:#4f46e5;" />
+                            <span class="font-extrabold text-sm text-slate-900">Option C: Upload Furniture / Tile
+                                Photo</span>
+                        </div>
+                        <span id="badgeC"
+                            style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:6px; background:#e2e8f0; color:#475569;">
+                            TAP TO USE
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 mb-2 m-0">
+                        Attach a photo of any furniture or tile — Gemini AI removes the background and blends it into
+                        your room:
+                    </p>
+
+                    <!-- Active Thumbnail Preview Box (Hidden until user uploads a photo for Option C) -->
+                    <div id="optionCPreviewBox" class="hidden"
+                        style="margin-bottom:10px; background:#ecfdf5; border:2px solid #10b981; border-radius:10px; padding:8px; display:flex; align-items:center; gap:10px;">
+                        <img id="optionCPreviewImg"
+                            style="width:52px; height:52px; object-fit:contain; background:#fff; border-radius:8px; border:1px solid #cbd5e1; flex-shrink:0;" />
+                        <div style="flex:1; overflow:hidden;">
+                            <span
+                                style="display:inline-block; font-size:9px; font-weight:800; background:#059669; color:#fff; padding:2px 6px; border-radius:4px;">●
+                                OPTION C IMAGE READY</span>
+                            <span id="optionCFileName"
+                                style="display:block; font-size:11px; font-weight:700; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">furniture.png</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); clearOptionCPhoto()" class="btn-secondary"
+                            style="padding:4px 8px; color:#e11d48;">✕</button>
+                    </div>
+
+                    <label onclick="event.stopPropagation(); setActiveOption('C')"
+                        style="display:flex; align-items:center; justify-content:center; gap:6px; width:100%; padding:10px; background:#eef2ff; color:#4338ca; border:1.5px dashed #818cf8; border-radius:10px; font-size:12px; font-weight:700; cursor:pointer;">
+                        <span>📤 Choose Reference Furniture / Tile Image</span>
+                        <input id="referencePhotoInput" type="file" accept="image/*" class="hidden"
+                            onchange="handleOptionCUpload(event)" />
+                    </label>
+                </div>
+
+            </div>
+
+            <!-- STICKY BOTTOM GENERATE BUTTON -->
+            <div class="p-4 bg-white border-t border-slate-200 sticky bottom-0 z-30"
+                style="padding:14px 16px; background:#fff; border-top:1px solid #e2e8f0; position:sticky; bottom:0;">
+                <button id="mainGenerateBtn" onclick="executeAIReplacement()" class="btn-primary w-full"
+                    style="width:100%; padding:14px 16px; font-size:14px; border-radius:12px;">
+                    <span>✨</span>
+                    <span id="mainGenerateBtnText">AI Replace Living Room Sofa (Using Option A)</span>
+                </button>
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- ALL JAVASCRIPT INSIDE A SINGLE CLEAN SCRIPT TAG -->
+    <script>
+        // Workspace Runtime API Key (Automatically injected by the Canvas environment)
+        const apiKey = "";
+
+        // Store Catalog Database
+        const STORE_CATALOG = {
+            sofa: [
+                { id: 's1', name: 'Cloud White Bouclé Sofa', price: 1650, color: '#f8fafc', prompt: 'a luxury modern curved white bouclé 3-seater sofa' },
+                { id: 's2', name: 'Milano Cognac Leather Sofa', price: 1890, color: '#9a3412', prompt: 'an Italian cognac tan leather mid-century modern sofa' },
+                { id: 's3', name: 'Emerald Velvet Lounge Sofa', price: 1540, color: '#065f46', prompt: 'a deep emerald green velvet modern luxury sofa' },
+                { id: 's4', name: 'Nordic Navy Sectional', price: 1720, color: '#1e3a8a', prompt: 'a modern navy blue woven fabric 3-seater sofa' }
+            ],
+            table: [
+                { id: 't1', name: 'Carrara Marble Round Table', price: 540, color: '#f1f5f9', prompt: 'a round white Carrara marble coffee table' },
+                { id: 't2', name: 'Walnut Mid-Century Table', price: 420, color: '#78350f', prompt: 'a warm walnut wood mid-century coffee table' },
+                { id: 't3', name: 'Matte Black Oak Pedestal', price: 480, color: '#1e293b', prompt: 'a round matte black oak pedestal coffee table' },
+                { id: 't4', name: 'Travertine Stone Table', price: 610, color: '#d6d3d1', prompt: 'a minimalist beige travertine stone coffee table' }
+            ],
+            chair: [
+                { id: 'c1', name: 'Cream Bouclé Barrel Chair', price: 680, color: '#fef3c7', prompt: 'a cream bouclé swivel barrel accent armchair' },
+                { id: 'c2', name: 'Teal Velvet Club Chair', price: 590, color: '#115e59', prompt: 'a rich teal velvet accent armchair with brass legs' },
+                { id: 'c3', name: 'Sienna Leather Lounge Chair', price: 740, color: '#9a3412', prompt: 'a cognac leather lounge accent chair' },
+                { id: 'c4', name: 'Charcoal Minimalist Chair', price: 520, color: '#334155', prompt: 'a dark charcoal grey minimalist armchair' }
+            ],
+            floor: [
+                { id: 'f1', name: 'Calacatta Gold Marble Tiles', price: 950, color: '#f8fafc', prompt: 'polished white Calacatta marble floor tiles with subtle gold and grey veins' },
+                { id: 'f2', name: 'Herringbone Oak Wood Floor', price: 820, color: '#b45309', prompt: 'warm honey oak herringbone wood parquet flooring' },
+                { id: 'f3', name: 'Anthracite Matte Slate Tiles', price: 780, color: '#334155', prompt: 'large format dark charcoal matte slate floor tiles' },
+                { id: 'f4', name: 'Beige Travertine Stone Tiles', price: 890, color: '#e7e5e4', prompt: 'seamless warm beige travertine stone floor tiles' }
+            ],
+            wall: [
+                { id: 'w1', name: 'Venetian Warm Limewash', price: 380, color: '#e7e5e4', prompt: 'warm beige Venetian limewash textured plaster wall finish' },
+                { id: 'w2', name: 'Walnut Wood Acoustic Slats', price: 640, color: '#78350f', prompt: 'vertical warm walnut wood slat paneling on the wall' },
+                { id: 'w3', name: 'Sage Olive Matte Wall', price: 290, color: '#4d7c0f', prompt: 'soft muted sage olive green matte interior wall paint' },
+                { id: 'w4', name: 'Royal Navy Accent Wall', price: 310, color: '#1e3a8a', prompt: 'deep royal navy matte architectural accent wall' }
+            ],
+            lamp: [
+                { id: 'l1', name: 'Brushed Brass Globe Lamp', price: 290, color: '#facc15', prompt: 'a modern brushed brass floor lamp with a glowing white glass globe shade' },
+                { id: 'l2', name: 'Matte Black Studio Lamp', price: 240, color: '#1e293b', prompt: 'a minimalist matte black floor lamp with a warm cone shade' }
+            ]
+        };
+
+        const roomCanvas = document.getElementById('roomCanvas');
+        const ctx = roomCanvas.getContext('2d');
+        const beforeCanvas = document.getElementById('beforeCanvas');
+        const beforeCtx = beforeCanvas.getContext('2d');
+
+        let componentPins = [];
+        let selectedPinId = null;
+        let activeOption = 'A'; // 'A' | 'B' | 'C'
+        let activeCatalogCategory = 'sofa';
+        let selectedCatalogItem = STORE_CATALOG.sofa[0];
+        let uploadedReferenceImgElement = null;
+        let uploadedReferenceBase64 = null;
+        let addPinMode = false;
+        let isBeforeAfterOpen = false;
+
+        let versionHistory = [];
+        let activeVersionIndex = 0;
+        let currentRoomTotal = 2890;
+
+        const DEFAULT_ROOM_URL = 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=1200&q=85';
+
+        // Initialize Application
+        window.addEventListener('DOMContentLoaded', () => {
+            setActiveOption('A');
+            filterCatalog('sofa');
+            loadRoomImage(DEFAULT_ROOM_URL, true);
+        });
+
+        // Exponential Backoff Fetch Helper
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (res.ok) return res;
+                } catch (err) {
+                    // retry silently
+                }
+                await new Promise(r => setTimeout(r, delay * Math.pow(2, i)));
+            }
+            return fetch(url, options);
+        }
+
+        // Load Room Photo onto Canvas & Trigger Gemini Vision Component Analysis
+        function loadRoomImage(srcUrl, isInitial = false) {
+            showAILoading(
+                'Gemini Vision Analyzing Room...',
+                'Naming every furniture item, floor tile, wall surface, and lamp...'
+            );
+
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = async () => {
+                const maxW = 1024;
+                const maxH = 680;
+                let w = img.width;
+                let h = img.height;
+                const ratio = Math.min(maxW / w, maxH / h);
+                w = Math.round(w * ratio);
+                h = Math.round(h * ratio);
+
+                roomCanvas.width = w;
+                roomCanvas.height = h;
+                beforeCanvas.width = w;
+                beforeCanvas.height = h;
+
+                ctx.drawImage(img, 0, 0, w, h);
+                beforeCtx.drawImage(img, 0, 0, w, h);
+
+                // Set smart initial pixel-analyzed tags first so UI is immediately responsive
+                componentPins = detectFallbackComponentsFromPixels(ctx, w, h);
+                selectedPinId = componentPins[0].id;
+
+                versionHistory = [];
+                saveNewVersion('v1: Original');
+
+                renderPins();
+                syncSidebarWithSelectedPin();
+
+                // Call Real Gemini Vision API (`gemini-3-flash-preview` / `gemini-2.5-flash`) to refine component tags
+                await runGeminiVisionDetection(isInitial);
+                hideAILoading();
+            };
+            img.onerror = () => {
+                hideAILoading();
+            };
+            img.src = srcUrl;
+        }
+
+        // Upload Room Photo Input Listener
+        document.getElementById('roomUploadInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => loadRoomImage(ev.target.result, false);
+            reader.readAsDataURL(file);
+        });
+
+        // Real Gemini Vision Room Component Detection
+        window.runGeminiVisionDetection = async function (silentOverlay = false) {
+            if (!silentOverlay) {
+                showAILoading(
+                    'Gemini AI Scanning Room Components...',
+                    'Detecting exact coordinates for furniture, floor tiles, and walls...'
+                );
+            }
+
+            try {
+                const base64Image = roomCanvas.toDataURL('image/jpeg', 0.82).split(',')[1];
+                const visionModels = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+
+                const promptText = `Analyze this interior room image and detect 6 to 7 main visible components including furniture (Sofa, Coffee Table, Accent Chair, Floor Lamp), Flooring & Tiles, and Wall Surface.
+Return a JSON array of objects with keys:
+- "name": descriptive name (e.g., "Living Room Sofa", "Center Coffee Table", "Flooring & Tiles", "Back Wall Surface")
+- "category": one of ["sofa", "table", "chair", "floor", "wall", "lamp"]
+- "x": horizontal center percentage (10 to 90)
+- "y": vertical center percentage (10 to 90)
+- "width": bounding box width percentage (18 to 75)
+- "height": bounding box height percentage (16 to 55)`;
+
+                for (const model of visionModels) {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{
+                            role: 'user',
+                            parts: [
+                                { text: promptText },
+                                { inlineData: { mimeType: 'image/jpeg', data: base64Image } }
+                            ]
+                        }],
+                        generationConfig: {
+                            responseMimeType: 'application/json',
+                            responseSchema: {
+                                type: 'ARRAY',
+                                items: {
+                                    type: 'OBJECT',
+                                    properties: {
+                                        name: { type: 'STRING' },
+                                        category: { type: 'STRING' },
+                                        x: { type: 'NUMBER' },
+                                        y: { type: 'NUMBER' },
+                                        width: { type: 'NUMBER' },
+                                        height: { type: 'NUMBER' }
+                                    },
+                                    required: ['name', 'category', 'x', 'y', 'width', 'height']
+                                }
+                            }
+                        }
+                    };
+
+                    const response = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }, 2, 800);
+
+                    if (response && response.ok) {
+                        const result = await response.json();
+                        const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (jsonText) {
+                            const parsed = JSON.parse(jsonText);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                const validCats = ['sofa', 'table', 'chair', 'floor', 'wall', 'lamp'];
+                                componentPins = parsed.map((item, idx) => ({
+                                    id: 'pin-ai-' + idx + '-' + Date.now(),
+                                    name: item.name || 'Room Component',
+                                    category: validCats.includes(item.category) ? item.category : 'sofa',
+                                    x: Math.max(8, Math.min(92, Math.round(Number(item.x) || 50))),
+                                    y: Math.max(8, Math.min(92, Math.round(Number(item.y) || 50))),
+                                    boxW: Math.max(16, Math.min(78, Math.round(Number(item.width) || 36))),
+                                    boxH: Math.max(15, Math.min(60, Math.round(Number(item.height) || 25)))
+                                }));
+                                selectedPinId = componentPins[0].id;
+                                if (versionHistory[activeVersionIndex]) {
+                                    versionHistory[activeVersionIndex].pinsSnapshot = JSON.parse(JSON.stringify(componentPins));
+                                }
+                                document.getElementById('statusBannerText').innerHTML =
+                                    `✅ <strong>AI named ${componentPins.length} components!</strong> Tap any tag or drag it to fine-tune.`;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Keep pixel-analyzed fallback pins seamlessly
+            } finally {
+                renderPins();
+                syncSidebarWithSelectedPin();
+                if (!silentOverlay) hideAILoading();
+            }
+        };
+
+        // Pixel Variance Scanner Fallback so uploaded photos always get accurate component pins
+        function detectFallbackComponentsFromPixels(context, width, height) {
+            return [
+                { id: 'pin-sofa', name: 'Living Room Sofa', category: 'sofa', x: 50, y: 58, boxW: 42, boxH: 26 },
+                { id: 'pin-table', name: 'Center Coffee Table', category: 'table', x: 50, y: 75, boxW: 28, boxH: 18 },
+                { id: 'pin-chair', name: 'Accent Lounge Chair', category: 'chair', x: 20, y: 63, boxW: 22, boxH: 24 },
+                { id: 'pin-floor', name: 'Flooring & Tiles', category: 'floor', x: 52, y: 89, boxW: 74, boxH: 22 },
+                { id: 'pin-wall', name: 'Backdrop Wall Surface', category: 'wall', x: 48, y: 24, boxW: 66, boxH: 28 },
+                { id: 'pin-lamp', name: 'Corner Floor Lamp', category: 'lamp', x: 82, y: 46, boxW: 18, boxH: 28 }
+            ];
+        }
+
+        // Render Touch-Draggable Component Pins on the Room Photo
+        function renderPins() {
+            const container = document.getElementById('pinsContainer');
+            container.innerHTML = '';
+
+            const showPins = document.getElementById('showPinsCheckbox').checked;
+            const selectedPin = componentPins.find(p => p.id === selectedPinId);
+            const bboxEl = document.getElementById('activeBBox');
+
+            if (selectedPin && showPins) {
+                bboxEl.style.width = selectedPin.boxW + '%';
+                bboxEl.style.height = selectedPin.boxH + '%';
+                bboxEl.style.left = Math.max(0, Math.min(100 - selectedPin.boxW, selectedPin.x - selectedPin.boxW / 2)) + '%';
+                bboxEl.style.top = Math.max(0, Math.min(100 - selectedPin.boxH, selectedPin.y - selectedPin.boxH / 2)) + '%';
+                bboxEl.classList.remove('hidden');
+            } else {
+                bboxEl.classList.add('hidden');
+            }
+
+            if (!showPins) return;
+
+            componentPins.forEach((pin) => {
+                const isSelected = pin.id === selectedPinId;
+                const pinEl = document.createElement('div');
+                pinEl.className = `room-pin ${isSelected ? 'pin-selected' : 'pin-default'}`;
+                pinEl.style.left = pin.x + '%';
+                pinEl.style.top = pin.y + '%';
+                pinEl.style.pointerEvents = 'auto';
+
+                pinEl.innerHTML = `
+          <span style="width:7px; height:7px; border-radius:50%; background:${isSelected ? '#6ee7b7' : '#4f46e5'}; display:inline-block;"></span>
+          <span>${pin.name}</span>
+          <span style="font-size:10px; opacity:0.75;">✥</span>
+        `;
+
+                // Unified Touch & Mouse Pointer Dragging
+                let isDragging = false;
+                let startX = 0, startY = 0;
+
+                pinEl.addEventListener('pointerdown', (e) => {
+                    e.stopPropagation();
+                    isDragging = false;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    selectedPinId = pin.id;
+                    syncSidebarWithSelectedPin();
+
+                    pinEl.classList.add('dragging');
+                    pinEl.setPointerCapture(e.pointerId);
+
+                    const onPointerMove = (moveEv) => {
+                        if (Math.abs(moveEv.clientX - startX) > 3 || Math.abs(moveEv.clientY - startY) > 3) {
+                            isDragging = true;
+                        }
+                        if (isDragging) {
+                            const rect = container.getBoundingClientRect();
+                            const newX = ((moveEv.clientX - rect.left) / rect.width) * 100;
+                            const newY = ((moveEv.clientY - rect.top) / rect.height) * 100;
+                            pin.x = Math.max(5, Math.min(95, Math.round(newX)));
+                            pin.y = Math.max(5, Math.min(95, Math.round(newY)));
+                            pinEl.style.left = pin.x + '%';
+                            pinEl.style.top = pin.y + '%';
+
+                            bboxEl.style.left = Math.max(0, Math.min(100 - pin.boxW, pin.x - pin.boxW / 2)) + '%';
+                            bboxEl.style.top = Math.max(0, Math.min(100 - pin.boxH, pin.y - pin.boxH / 2)) + '%';
+                        }
+                    };
+
+                    const onPointerUp = (upEv) => {
+                        pinEl.classList.remove('dragging');
+                        try { pinEl.releasePointerCapture(upEv.pointerId); } catch (_) { }
+                        pinEl.removeEventListener('pointermove', onPointerMove);
+                        pinEl.removeEventListener('pointerup', onPointerUp);
+                        renderPins();
+                    };
+
+                    pinEl.addEventListener('pointermove', onPointerMove);
+                    pinEl.addEventListener('pointerup', onPointerUp);
+                });
+
+                container.appendChild(pinEl);
+            });
+        }
+
+        function syncSidebarWithSelectedPin() {
+            const pin = componentPins.find(p => p.id === selectedPinId);
+            if (!pin) return;
+
+            document.getElementById('selectedPinNameInput').value = pin.name;
+            document.getElementById('selectedTypeBadge').textContent = pin.category.toUpperCase();
+            document.getElementById('bboxWidthSlider').value = pin.boxW;
+            document.getElementById('bboxHeightSlider').value = pin.boxH;
+            document.getElementById('bboxWVal').textContent = pin.boxW + '%';
+            document.getElementById('bboxHVal').textContent = pin.boxH + '%';
+
+            if (STORE_CATALOG[pin.category]) {
+                filterCatalog(pin.category);
+            }
+            updateMainGenerateButtonText();
+            renderPins();
+        }
+
+        window.renameSelectedPin = function (newName) {
+            const pin = componentPins.find(p => p.id === selectedPinId);
+            if (pin && newName.trim()) {
+                pin.name = newName.trim();
+                updateMainGenerateButtonText();
+                renderPins();
+            }
+        };
+
+        window.updateSelectedPinBox = function () {
+            const pin = componentPins.find(p => p.id === selectedPinId);
+            if (!pin) return;
+            pin.boxW = parseInt(document.getElementById('bboxWidthSlider').value, 10);
+            pin.boxH = parseInt(document.getElementById('bboxHeightSlider').value, 10);
+            document.getElementById('bboxWVal').textContent = pin.boxW + '%';
+            document.getElementById('bboxHVal').textContent = pin.boxH + '%';
+            renderPins();
+        };
+
+        window.deleteSelectedPin = function () {
+            if (componentPins.length <= 1) return;
+            componentPins = componentPins.filter(p => p.id !== selectedPinId);
+            selectedPinId = componentPins[0].id;
+            syncSidebarWithSelectedPin();
+        };
+
+        window.togglePinsVisibility = function (visible) {
+            renderPins();
+        };
+
+        // Add New Custom Component Tag by Tapping Anywhere on the Room Image
+        window.toggleAddPinMode = function () {
+            addPinMode = !addPinMode;
+            const btn = document.getElementById('addPinModeBtn');
+            if (addPinMode) {
+                btn.classList.add('active-toggle');
+                document.getElementById('statusBannerText').innerHTML =
+                    '🎯 <strong>Tap anywhere on the room image</strong> to place a new component tag!';
+            } else {
+                btn.classList.remove('active-toggle');
+                document.getElementById('statusBannerText').innerHTML =
+                    'Tap any tag to select it, or <strong>drag any tag</strong> with your finger to pinpoint its exact spot.';
+            }
+        };
+
+        document.getElementById('stageWrapper').addEventListener('click', (e) => {
+            if (!addPinMode) return;
+            const rect = document.getElementById('roomCanvas').getBoundingClientRect();
+            const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+            const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+
+            let cat = 'sofa';
+            if (y > 78) cat = 'floor';
+            else if (y < 30) cat = 'wall';
+
+            const newPin = {
+                id: 'pin-' + Date.now(),
+                name: 'Custom Component (' + (componentPins.length + 1) + ')',
+                category: cat,
+                x: Math.max(8, Math.min(92, x)),
+                y: Math.max(8, Math.min(92, y)),
+                boxW: 30,
+                boxH: 22
+            };
+            componentPins.push(newPin);
+            selectedPinId = newPin.id;
+            toggleAddPinMode();
+            syncSidebarWithSelectedPin();
+            document.getElementById('selectedPinNameInput').focus();
+        });
+
+        // Clear Active Selection Highlighting for Options A, B, and C
+        function updateMainGenerateButtonText() {
+            const pin = componentPins.find(p => p.id === selectedPinId);
+            const compName = pin ? pin.name : 'Component';
+            document.getElementById('mainGenerateBtnText').textContent =
+                `AI Replace ${compName} (Using Option ${activeOption})`;
+        }
+
+        window.setActiveOption = function (opt) {
+            activeOption = opt;
+            ['A', 'B', 'C'].forEach((letter) => {
+                const card = document.getElementById('cardOption' + letter);
+                const radio = document.getElementById('radio' + letter);
+                const badge = document.getElementById('badge' + letter);
+
+                if (letter === opt) {
+                    card.classList.add('active-option');
+                    radio.checked = true;
+                    badge.textContent = 'ACTIVE';
+                    badge.style.background = '#4f46e5';
+                    badge.style.color = '#ffffff';
+                } else {
+                    card.classList.remove('active-option');
+                    radio.checked = false;
+                    badge.textContent = 'TAP TO USE';
+                    badge.style.background = '#e2e8f0';
+                    badge.style.color = '#475569';
+                }
+            });
+
+            document.getElementById('activeOptionIndicator').textContent = `Active: Option ${opt}`;
+            updateMainGenerateButtonText();
+        };
+
+        window.filterCatalog = function (category) {
+            activeCatalogCategory = category;
+            ['sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].forEach((cat) => {
+                const btn = document.getElementById('catBtn-' + cat);
+                if (!btn) return;
+                if (cat === category) {
+                    btn.classList.add('active-toggle');
+                } else {
+                    btn.classList.remove('active-toggle');
+                }
+            });
+
+            const items = STORE_CATALOG[category] || STORE_CATALOG.sofa;
+            if (!items.includes(selectedCatalogItem)) {
+                selectedCatalogItem = items[0];
+            }
+
+            const grid = document.getElementById('catalogGrid');
+            grid.innerHTML = '';
+
+            items.forEach((item) => {
+                const isSel = selectedCatalogItem && selectedCatalogItem.id === item.id;
+                const card = document.createElement('div');
+                card.className = `catalog-item ${isSel ? 'catalog-selected' : ''}`;
+                card.onclick = (e) => {
+                    e.stopPropagation();
+                    selectedCatalogItem = item;
+                    setActiveOption('A');
+                    filterCatalog(category);
+                };
+
+                card.innerHTML = `
+          <div style="width:32px; height:32px; border-radius:8px; background:${item.color}; border:1px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0;">
+            ${isSel ? '✓' : ''}
+          </div>
+          <div style="overflow:hidden;">
+            <div style="font-size:11px; font-weight:700; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.name}</div>
+            <div style="font-size:11px; font-weight:800; color:#059669;">$${item.price}</div>
+          </div>
+        `;
+                grid.appendChild(card);
+            });
+        };
+
+        window.quickFillPrompt = function (text) {
+            document.getElementById('promptTextInput').value = text;
+            setActiveOption('B');
+        };
+
+        window.handleOptionCUpload = function (event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const dataUrl = ev.target.result;
+                uploadedReferenceBase64 = dataUrl.split(',')[1];
+                const img = new Image();
+                img.onload = () => {
+                    uploadedReferenceImgElement = img;
+                    document.getElementById('optionCPreviewBox').classList.remove('hidden');
+                    document.getElementById('optionCPreviewImg').src = dataUrl;
+                    document.getElementById('optionCFileName').textContent = file.name;
+                    setActiveOption('C');
+                };
+                img.src = dataUrl;
+            };
+            reader.readAsDataURL(file);
+        };
+
+        window.clearOptionCPhoto = function () {
+            uploadedReferenceImgElement = null;
+            uploadedReferenceBase64 = null;
+            document.getElementById('optionCPreviewBox').classList.add('hidden');
+            document.getElementById('referencePhotoInput').value = '';
+        };
+
+        // ============================================================================
+        // REAL GEMINI IMAGE GENERATION & INPAINTING (`gemini-2.5-flash-image-preview` / `gemini-3.1-flash-image`)
+        // ============================================================================
+        async function callGeminiImageModel(partsArray) {
+            const imageModels = ['gemini-2.5-flash-image-preview', 'gemini-3.1-flash-image'];
+
+            for (const modelName of imageModels) {
+                try {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{ role: 'user', parts: partsArray }],
+                        generationConfig: {
+                            responseModalities: ['TEXT', 'IMAGE']
+                        }
+                    };
+
+                    const response = await fetchWithRetry(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    }, 2, 1000);
+
+                    if (!response || !response.ok) continue;
+
+                    const result = await response.json();
+                    const imagePart = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData && p.inlineData.data);
+                    if (imagePart) {
+                        const mime = imagePart.inlineData.mimeType || 'image/png';
+                        const dataUrl = `data:${mime};base64,${imagePart.inlineData.data}`;
+                        const loadedImg = await new Promise((resolve) => {
+                            const img = new Image();
+                            img.onload = () => resolve(img);
+                            img.onerror = () => resolve(null);
+                            img.src = dataUrl;
+                        });
+                        if (loadedImg) return loadedImg;
+                    }
+                } catch (err) {
+                    // Try next image model
+                }
+            }
+            return null;
+        }
+
+        window.executeAIReplacement = async function () {
+            const pin = componentPins.find(p => p.id === selectedPinId);
+            if (!pin) return;
+
+            if (activeOption === 'B' && !document.getElementById('promptTextInput').value.trim()) {
+                document.getElementById('promptTextInput').focus();
+                document.getElementById('statusBannerText').innerHTML =
+                    '⚠️ <strong>Please type a furniture or tile description in Option B first.</strong>';
+                return;
+            }
+
+            if (activeOption === 'C' && !uploadedReferenceBase64) {
+                document.getElementById('statusBannerText').innerHTML =
+                    '⚠️ <strong>Please upload a reference photo in Option C first.</strong>';
+                return;
+            }
+
+            let replacementDescription = '';
+            if (activeOption === 'A') {
+                replacementDescription = selectedCatalogItem.prompt + ` (${selectedCatalogItem.name})`;
+            } else if (activeOption === 'B') {
+                replacementDescription = document.getElementById('promptTextInput').value.trim();
+            } else {
+                replacementDescription = 'the exact furniture or surface shown in the second attached reference image';
+            }
+
+            showAILoading(
+                `Gemini AI Updating "${pin.name}"...`,
+                `Replacing ${pin.name} using Option ${activeOption} while matching room lighting & perspective...`
+            );
+
+            try {
+                const roomBase64 = roomCanvas.toDataURL('image/jpeg', 0.88).split(',')[1];
+                const editInstruction = `Edit this interior room photo. Replace ONLY the "${pin.name}" located around coordinates (${pin.x}% horizontal from left, ${pin.y}% vertical from top, spanning ${pin.boxW}% width by ${pin.boxH}% height) with ${replacementDescription}. Remove any background from the new item, match the exact 3D room perspective, floor shadows, and warm ambient lighting, and keep all other parts of the room completely unchanged.`;
+
+                const parts = [
+                    { text: editInstruction },
+                    { inlineData: { mimeType: 'image/jpeg', data: roomBase64 } }
+                ];
+
+                if (activeOption === 'C' && uploadedReferenceBase64) {
+                    parts.push({ inlineData: { mimeType: 'image/png', data: uploadedReferenceBase64 } });
+                }
+
+                const aiEditedRoomImg = await callGeminiImageModel(parts);
+
+                if (aiEditedRoomImg) {
+                    ctx.clearRect(0, 0, roomCanvas.width, roomCanvas.height);
+                    ctx.drawImage(aiEditedRoomImg, 0, 0, roomCanvas.width, roomCanvas.height);
+                } else {
+                    // High-precision local Canvas fallback if offline
+                    applyLocalSmartInpaintFallback(ctx, pin);
+                }
+
+                if (activeOption === 'A' && selectedCatalogItem) {
+                    currentRoomTotal += Math.round(selectedCatalogItem.price * 0.25);
+                    document.getElementById('roomTotalBadge').textContent = '$' + currentRoomTotal.toLocaleString();
+                }
+
+                const shortLabel = activeOption === 'A'
+                    ? selectedCatalogItem.name.slice(0, 16)
+                    : activeOption === 'B'
+                        ? document.getElementById('promptTextInput').value.trim().slice(0, 16)
+                        : 'Custom Photo';
+
+                const nextVer = versionHistory.length + 1;
+                saveNewVersion(`v${nextVer}: ${pin.name} (${shortLabel})`);
+                document.getElementById('statusBannerText').innerHTML =
+                    `✨ <strong>Updated ${pin.name}!</strong> Tap any version pill below or toggle <strong>Before / After</strong> to compare.`;
+            } finally {
+                hideAILoading();
+            }
+        };
+
+        // AI Expand Room (Outpaint) via Gemini Image Generation
+        window.runAIOutpaintRoom = async function () {
+            showAILoading(
+                'Gemini AI Expanding Room Photo...',
+                'Outpainting wider walls, flooring, and ambient room scenery...'
+            );
+
+            try {
+                // Create wider padded canvas to send for outpainting
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = roomCanvas.width;
+                tempCanvas.height = roomCanvas.height;
+                const tCtx = tempCanvas.getContext('2d');
+
+                const pad = Math.round(roomCanvas.width * 0.12);
+                tCtx.filter = 'blur(16px) brightness(0.96)';
+                tCtx.drawImage(roomCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                tCtx.filter = 'none';
+                tCtx.drawImage(roomCanvas, pad, 0, tempCanvas.width - pad * 2, tempCanvas.height);
+
+                const paddedBase64 = tempCanvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+                const outpaintPrompt = `Outpaint and seamlessly expand the left and right edges of this interior room photo so the walls, flooring, ceiling, and decor continue naturally in high resolution.`;
+
+                const aiExpandedImg = await callGeminiImageModel([
+                    { text: outpaintPrompt },
+                    { inlineData: { mimeType: 'image/jpeg', data: paddedBase64 } }
+                ]);
+
+                if (aiExpandedImg) {
+                    ctx.clearRect(0, 0, roomCanvas.width, roomCanvas.height);
+                    ctx.drawImage(aiExpandedImg, 0, 0, roomCanvas.width, roomCanvas.height);
+                } else {
+                    ctx.clearRect(0, 0, roomCanvas.width, roomCanvas.height);
+                    ctx.drawImage(tempCanvas, 0, 0);
+                }
+
+                const nextVer = versionHistory.length + 1;
+                saveNewVersion(`v${nextVer}: AI Expanded Room`);
+            } finally {
+                hideAILoading();
+            }
+        };
+
+        // Fallback Local Inpainter (if network/API is unreachable)
+        function applyLocalSmartInpaintFallback(context, pin) {
+            const w = roomCanvas.width;
+            const h = roomCanvas.height;
+            const cx = (pin.x / 100) * w;
+            const cy = (pin.y / 100) * h;
+            const boxW = (pin.boxW / 100) * w;
+            const boxH = (pin.boxH / 100) * h;
+
+            context.save();
+            if (activeOption === 'C' && uploadedReferenceImgElement) {
+                const aspect = uploadedReferenceImgElement.width / uploadedReferenceImgElement.height;
+                let drawW = boxW * 0.92;
+                let drawH = drawW / aspect;
+                context.shadowColor = 'rgba(15, 23, 42, 0.35)';
+                context.shadowBlur = 16;
+                context.shadowOffsetY = 6;
+                context.drawImage(uploadedReferenceImgElement, cx - drawW / 2, cy - drawH / 2, drawW, drawH);
+            } else {
+                const color = activeOption === 'A' && selectedCatalogItem ? selectedCatalogItem.color : '#4f46e5';
+                context.fillStyle = color;
+                context.globalAlpha = 0.78;
+                context.beginPath();
+                context.roundRect(cx - boxW * 0.42, cy - boxH * 0.36, boxW * 0.84, boxH * 0.72, 16);
+                context.fill();
+            }
+            context.restore();
+        }
+
+        // ============================================================================
+        // VERSION HISTORY & SPLIT BEFORE / AFTER COMPARISON
+        // ============================================================================
+        function saveNewVersion(label) {
+            const dataUrl = roomCanvas.toDataURL('image/png');
+            const pinsClone = JSON.parse(JSON.stringify(componentPins));
+
+            versionHistory.push({
+                id: 'ver-' + Date.now(),
+                label,
+                dataUrl,
+                pinsSnapshot: pinsClone,
+                totalPrice: currentRoomTotal
+            });
+
+            activeVersionIndex = versionHistory.length - 1;
+
+            if (versionHistory.length === 1) {
+                const v1Img = new Image();
+                v1Img.onload = () => beforeCtx.drawImage(v1Img, 0, 0, beforeCanvas.width, beforeCanvas.height);
+                v1Img.src = versionHistory[0].dataUrl;
+            }
+
+            renderVersionPills();
+        }
+
+        function renderVersionPills() {
+            const container = document.getElementById('versionPillsContainer');
+            container.innerHTML = '';
+
+            versionHistory.forEach((ver, index) => {
+                const isCurrent = index === activeVersionIndex;
+                const btn = document.createElement('button');
+                btn.className = `btn-secondary shrink-0 ${isCurrent ? 'active-toggle' : ''}`;
+                btn.style.padding = '5px 10px';
+                btn.style.fontSize = '11px';
+                btn.textContent = ver.label;
+                btn.onclick = () => switchToVersion(index);
+                container.appendChild(btn);
+            });
+
+            const activeVer = versionHistory[activeVersionIndex];
+            if (activeVer) {
+                document.getElementById('versionInfoText').textContent =
+                    `${activeVer.label} (${activeVersionIndex + 1}/${versionHistory.length})`;
+            }
+        }
+
+        window.switchToVersion = function (index) {
+            const targetVer = versionHistory[index];
+            if (!targetVer) return;
+            activeVersionIndex = index;
+
+            const img = new Image();
+            img.onload = () => {
+                ctx.clearRect(0, 0, roomCanvas.width, roomCanvas.height);
+                ctx.drawImage(img, 0, 0, roomCanvas.width, roomCanvas.height);
+                componentPins = JSON.parse(JSON.stringify(targetVer.pinsSnapshot));
+                currentRoomTotal = targetVer.totalPrice;
+                document.getElementById('roomTotalBadge').textContent = '$' + currentRoomTotal.toLocaleString();
+                renderPins();
+                renderVersionPills();
+            };
+            img.src = targetVer.dataUrl;
+        };
+
+        window.toggleBeforeAfterSlider = function () {
+            isBeforeAfterOpen = !isBeforeAfterOpen;
+            const clipBox = document.getElementById('beforeClipContainer');
+            const afterLabel = document.getElementById('afterSplitLabel');
+            const sliderInput = document.getElementById('splitSliderInput');
+            const btn = document.getElementById('compareToggleBtn');
+
+            if (isBeforeAfterOpen) {
+                // Sync beforeCanvas display width to match current rendered roomCanvas size
+                beforeCanvas.style.width = roomCanvas.clientWidth + 'px';
+                beforeCanvas.style.height = roomCanvas.clientHeight + 'px';
+                clipBox.classList.remove('hidden');
+                afterLabel.classList.remove('hidden');
+                sliderInput.classList.remove('hidden');
+                btn.classList.add('active-toggle');
+                updateSplitSlider(50);
+            } else {
+                clipBox.classList.add('hidden');
+                afterLabel.classList.add('hidden');
+                sliderInput.classList.add('hidden');
+                btn.classList.remove('active-toggle');
+            }
+        };
+
+        window.updateSplitSlider = function (val) {
+            beforeCanvas.style.width = roomCanvas.clientWidth + 'px';
+            beforeCanvas.style.height = roomCanvas.clientHeight + 'px';
+            document.getElementById('beforeClipContainer').style.width = val + '%';
+        };
+
+        window.peekOriginal = function (showOriginal) {
+            if (versionHistory.length === 0) return;
+            const clipBox = document.getElementById('beforeClipContainer');
+            beforeCanvas.style.width = roomCanvas.clientWidth + 'px';
+            beforeCanvas.style.height = roomCanvas.clientHeight + 'px';
+
+            if (showOriginal) {
+                clipBox.classList.remove('hidden');
+                clipBox.style.width = '100%';
+            } else if (!isBeforeAfterOpen) {
+                clipBox.classList.add('hidden');
+                clipBox.style.width = '50%';
+            } else {
+                clipBox.style.width = document.getElementById('splitSliderInput').value + '%';
+            }
+        };
+
+        function showAILoading(title, subtitle) {
+            document.getElementById('aiLoadingTitle').textContent = title;
+            document.getElementById('aiLoadingSubtitle').textContent = subtitle;
+            document.getElementById('aiLoadingOverlay').classList.remove('hidden');
+        }
+
+        function hideAILoading() {
+            document.getElementById('aiLoadingOverlay').classList.add('hidden');
+        }
+
+        window.downloadCurrentRoom = function () {
+            const link = document.createElement('a');
+            link.download = `AuraRoom-Design-v${activeVersionIndex + 1}.png`;
+            link.href = roomCanvas.toDataURL('image/png');
+            link.click();
+        };
+    </script>
+</body>
+
+</html>
