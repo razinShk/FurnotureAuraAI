@@ -1230,37 +1230,33 @@ export default function CustomerStudio({
                     const h = pin.boxH || 22;
                     return (
                       <React.Fragment key={pin.id}>
-                        {/* 1. Architectural Bounding Box */}
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPinId(pin.id);
-                          }}
-                          className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer ${
-                            isSelected
-                              ? 'border-2 border-dashed border-indigo-500 bg-indigo-500/15 shadow-[0_0_20px_rgba(99,102,241,0.35)] ring-1 ring-white/50 z-35'
-                              : 'border border-dashed border-white/60 dark:border-white/40 bg-slate-900/10 hover:border-indigo-400 hover:bg-indigo-500/10 z-25'
-                          }`}
-                          style={{
-                            left: `${pin.x}%`,
-                            top: `${pin.y}%`,
-                            width: `${w}%`,
-                            height: `${h}%`
-                          }}
-                        >
-                          {/* Corner bounding accents */}
-                          <div className={`absolute -top-1 -left-1 w-2.5 h-2.5 border-t-2 border-l-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
-                          <div className={`absolute -top-1 -right-1 w-2.5 h-2.5 border-t-2 border-r-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
-                          <div className={`absolute -bottom-1 -left-1 w-2.5 h-2.5 border-b-2 border-l-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
-                          <div className={`absolute -bottom-1 -right-1 w-2.5 h-2.5 border-b-2 border-r-2 ${isSelected ? 'border-amber-400' : 'border-white/80'}`} />
-                          
-                          {/* Dimension label tag (shown when selected) */}
-                          {isSelected && (
-                            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-slate-950/80 backdrop-blur-md text-[9px] font-mono font-bold text-amber-300 whitespace-nowrap shadow select-none">
-                              {w}% × {h}%
+                        {/* 1. Architectural Bounding Box (Render ONLY for the active selected furniture item) */}
+                        {isSelected && (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPinId(pin.id);
+                            }}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer border-2 border-dashed border-indigo-500 bg-indigo-500/15 shadow-[0_0_25px_rgba(99,102,241,0.4)] ring-2 ring-white/60 z-35"
+                            style={{
+                              left: `${pin.x}%`,
+                              top: `${pin.y}%`,
+                              width: `${w}%`,
+                              height: `${h}%`
+                            }}
+                          >
+                            {/* Corner bounding accents */}
+                            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-amber-400" />
+                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-amber-400" />
+                            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-amber-400" />
+                            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-amber-400" />
+                            
+                            {/* Dimension label tag (selected item) */}
+                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-slate-950/85 backdrop-blur-md text-[9px] font-mono font-bold text-amber-300 whitespace-nowrap shadow-md select-none border border-slate-700">
+                              {w}% × {h}% • {pin.name}
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
                         {/* 2. Interactive Pin Tag Button */}
                         <div
