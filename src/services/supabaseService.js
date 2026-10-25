@@ -361,7 +361,7 @@ export async function deleteRoomProject(projectId) {
 /**
  * 9. Synchronize Clerk User with Supabase Profiles Table
  */
-export async function syncClerkUserWithSupabase(clerkUser, role = 'customer') {
+export async function syncClerkUserWithSupabase(clerkUser) {
   if (!clerkUser) return null;
 
   const email = (clerkUser.primaryEmailAddress?.emailAddress || 'user@aura.ai').toLowerCase();
@@ -370,19 +370,9 @@ export async function syncClerkUserWithSupabase(clerkUser, role = 'customer') {
 
   // Explicit Super Admin Designation
   const isSuperAdmin = email === 'razinshaikh3133@gmail.com';
-  const effectiveRole = isSuperAdmin ? 'admin' : (role || 'customer');
-
-  const identity = {
-    id: clerkUser.id,
-    email,
-    name,
-    avatar_url: avatarUrl,
-    role: effectiveRole,
-    updated_at: new Date().toISOString()
-  };
 
   try {
-    // 1. Query by email to prevent Postgres UUID parse error for Clerk IDs (e.g. user_...)
+    // 1. Query by email to find existing profile
     const { data: existing, error: readError } = await supabase
       .from('profiles')
       .select('*')
@@ -390,35 +380,39 @@ export async function syncClerkUserWithSupabase(clerkUser, role = 'customer') {
       .maybeSingle();
 
     if (existing) {
+      // Preserve the role and credits stored in the database (prevent client privilege escalation)
+      const targetRole = isSuperAdmin ? 'admin' : (existing.role || 'customer');
       const updatePayload = {
         name,
         avatar_url: avatarUrl,
-        role: effectiveRole,
+        role: targetRole,
         credits: isSuperAdmin ? Math.max(existing.credits || 0, 5000) : (existing.credits ?? 100),
         plan: isSuperAdmin ? 'Super Admin Unlimited' : (existing.plan || 'Free Explorer'),
         updated_at: new Date().toISOString()
       };
+
       const { data: updated } = await supabase
         .from('profiles')
         .update(updatePayload)
         .eq('id', existing.id)
         .select()
         .maybeSingle();
-      return updated || { ...existing, ...updatePayload, id: clerkUser.id };
+
+      return updated || { ...existing, ...updatePayload, id: existing.id || clerkUser.id };
     }
 
-    // First sign-in: create the profile with the starter allowance for the role.
+    // First sign-in: create fresh profile
+    const starterRole = isSuperAdmin ? 'admin' : 'customer';
     const fresh = {
       email,
       name,
       avatar_url: avatarUrl,
-      role: effectiveRole,
-      credits: isSuperAdmin ? 5000 : (effectiveRole === 'admin' ? 5000 : effectiveRole === 'biller' ? 850 : 100),
-      plan: isSuperAdmin ? 'Super Admin Unlimited' : (effectiveRole === 'admin' ? 'Super Admin Unlimited' : effectiveRole === 'biller' ? 'Retailer Enterprise' : 'Free Explorer'),
+      role: starterRole,
+      credits: isSuperAdmin ? 5000 : 100,
+      plan: isSuperAdmin ? 'Super Admin Unlimited' : 'Free Explorer',
       updated_at: new Date().toISOString()
     };
 
-    // If clerkUser.id happens to be a valid UUID, include it; otherwise omit id to let Supabase generate a valid UUID
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clerkUser.id)) {
       fresh.id = clerkUser.id;
     }
@@ -432,9 +426,13 @@ export async function syncClerkUserWithSupabase(clerkUser, role = 'customer') {
     if (insertError) throw insertError;
     return inserted || { ...fresh, id: clerkUser.id };
   } catch (err) {
-    console.log('Supabase profile sync note:', err.message);
+    console.warn('Supabase profile sync notice:', err.message);
     return {
-      ...identity,
+      id: clerkUser.id,
+      email,
+      name,
+      avatar_url: avatarUrl,
+      role: isSuperAdmin ? 'admin' : 'customer',
       credits: isSuperAdmin ? 5000 : 100,
       plan: isSuperAdmin ? 'Super Admin Unlimited' : 'Free Explorer'
     };

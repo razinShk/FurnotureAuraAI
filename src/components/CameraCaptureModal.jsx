@@ -86,36 +86,36 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md">
       <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] transition-colors">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-600/20 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+            <div className="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
               <Camera size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-slate-900 dark:text-slate-100">Live Room Camera</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Snap your real room or furniture in flight to stage instantly</p>
+              <h3 className="font-extrabold text-base text-stone-900 dark:text-stone-100 font-serif">Live Room Camera</h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Snap your real room or furniture in flight to stage instantly</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800/80 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 flex items-center justify-center transition-colors"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Viewfinder Area */}
-        <div className="relative flex-1 bg-slate-950 flex items-center justify-center min-h-[360px] overflow-hidden">
+        <div className="relative flex-1 bg-stone-950 flex items-center justify-center min-h-[360px] overflow-hidden">
           {cameraError ? (
             <div className="p-8 text-center max-w-md">
               <div className="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-3">
                 <AlertCircle size={26} />
               </div>
               <h4 className="font-bold text-white mb-1">Camera Permission Required</h4>
-              <p className="text-xs text-slate-400 mb-4">{cameraError}</p>
+              <p className="text-xs text-stone-400 mb-4">{cameraError}</p>
               <button
                 onClick={startCamera}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-600/20"
+                className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
               >
                 Retry Camera
               </button>
@@ -138,9 +138,9 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
               />
               {/* Overlay Crosshairs */}
               <div className="absolute inset-8 pointer-events-none border border-white/20 rounded-2xl flex items-center justify-center">
-                <div className="w-16 h-16 border-2 border-indigo-400/40 rounded-xl" />
+                <div className="w-16 h-16 border-2 border-brand-400/40 rounded-xl" />
               </div>
-              <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[11px] text-slate-200">
+              <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[11px] text-stone-200">
                 Align your room or furniture piece inside the frame
               </div>
             </div>
@@ -148,12 +148,12 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
         </div>
 
         {/* Footer Controls */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="px-6 py-4 bg-stone-50 dark:bg-stone-950/80 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3">
           {!capturedPhoto ? (
             <>
               <button
                 onClick={toggleFacingMode}
-                className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-2 border border-slate-200 dark:border-slate-700 shadow-sm transition-colors"
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-2 border border-stone-200 dark:border-stone-700 shadow-sm transition-colors"
                 title="Switch front/back camera"
               >
                 <RefreshCw size={14} />
@@ -163,7 +163,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
               <button
                 onClick={takeSnapshot}
                 disabled={!!cameraError}
-                className="px-8 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/25 flex items-center gap-2 transition-all transform active:scale-95 disabled:opacity-50"
+                className="px-8 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center gap-2 transition-all transform active:scale-95 disabled:opacity-50"
               >
                 <Camera size={18} />
                 <span>Snap Room Photo</span>

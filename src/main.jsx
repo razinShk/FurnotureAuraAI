@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import App from './App.jsx';
 import './index.css';
 
@@ -11,16 +13,22 @@ const clerkPubKey =
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {clerkPubKey ? (
-      <ClerkProvider publishableKey={clerkPubKey}>
+    <ErrorBoundary>
+      {clerkPubKey ? (
+        <ClerkProvider publishableKey={clerkPubKey}>
+          <ThemeProvider>
+            <ToastProvider>
+              <App />
+            </ToastProvider>
+          </ThemeProvider>
+        </ClerkProvider>
+      ) : (
         <ThemeProvider>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </ThemeProvider>
-      </ClerkProvider>
-    ) : (
-      <ThemeProvider>
-        <App />
-      </ThemeProvider>
-    )}
+      )}
+    </ErrorBoundary>
   </React.StrictMode>
 );

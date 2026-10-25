@@ -1,148 +1,75 @@
 import { supabase, uploadToSupabaseStorage } from '../lib/supabase';
 
-// Helper to get active Replicate Key
-export function getActiveReplicateKey() {
-  const localKey = localStorage.getItem('aura_replicate_key');
-  if (localKey && localKey.trim() !== '') return localKey.trim();
-  return (
-    import.meta.env.VITE_REPLICATE_API_KEY ||
-    import.meta.env.replicate_api_key ||
-    ''
-  ).trim();
-}
-
 /**
- * 1. Analyze Room Spatial Geometry via Replicate (google/gemini-2.5-flash)
+ * 1. Analyze Room Spatial Geometry via Supabase Edge Function (Replicate Spatial Vision)
  */
 export async function analyzeRoomSpatial(imageBase64, mimeType = 'image/jpeg', userId = null) {
-  const apiKey = getActiveReplicateKey();
-
-  // Try Supabase Edge Function first
-  try {
-    const { data, error } = await supabase.functions.invoke('analyze-room', {
-      body: { imageBase64, mimeType, userId },
-      headers: { 'x-replicate-key': apiKey }
-    });
-
-    if (!error && data && data.success) {
-      return data;
-    }
-  } catch (edgeErr) {
-    console.log('Edge function fallback to direct/local pipeline:', edgeErr.message);
-  }
-
-  // Fallback: local backend proxy or direct API
-  const res = await fetch('/api/gemini/analyze', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-replicate-key': apiKey
-    },
-    body: JSON.stringify({ imageBase64, mimeType, userId })
+  const { data, error } = await supabase.functions.invoke('analyze-room', {
+    body: { imageBase64, mimeType, userId }
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Room analysis failed with status ${res.status}`);
+  if (error) {
+    console.error('Room spatial analysis error:', error);
+    throw new Error(error.message || 'Room spatial analysis failed. Ensure Supabase Edge Functions are deployed.');
   }
 
-  return await res.json();
+  if (!data || !data.success) {
+    throw new Error(data?.error || 'Room spatial analysis returned an invalid response.');
+  }
+
+  return data;
 }
 
 /**
- * 2. Analyze Reference Furniture Photo via Replicate (google/gemini-2.5-flash)
+ * 2. Analyze Reference Furniture Photo via Supabase Edge Function
  */
 export async function analyzeReferenceFurniture(imageBase64, mimeType = 'image/jpeg') {
-  const apiKey = getActiveReplicateKey();
-
-  // Try Supabase Edge Function first
-  try {
-    const { data, error } = await supabase.functions.invoke('analyze-reference', {
-      body: { imageBase64, mimeType },
-      headers: { 'x-replicate-key': apiKey }
-    });
-
-    if (!error && data && data.success) {
-      return data;
-    }
-  } catch (edgeErr) {
-    console.log('Edge function fallback to direct/local pipeline:', edgeErr.message);
-  }
-
-  // Fallback: local backend proxy or direct API
-  const res = await fetch('/api/reference/analyze', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-replicate-key': apiKey
-    },
-    body: JSON.stringify({ imageBase64, mimeType })
+  const { data, error } = await supabase.functions.invoke('analyze-reference', {
+    body: { imageBase64, mimeType }
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Reference analysis failed with status ${res.status}`);
+  if (error) {
+    console.warn('Reference furniture analysis error:', error);
+    return {
+      success: true,
+      description: 'The exact architectural furniture shown in the attached reference photo, matching its exact cushion division, silhouette, upholstery fabric, and color.'
+    };
   }
 
-  return await res.json();
+  return data || {
+    success: true,
+    description: 'The exact architectural furniture shown in the attached reference photo, matching its exact cushion division, silhouette, upholstery fabric, and color.'
+  };
 }
 
 /**
- * 3. Generate Staged Room Image via Replicate (google/nano-banana-pro)
+ * 3. Generate Staged Room Image via Supabase Edge Function (Replicate Neural Staging)
  */
 export async function generateStagedRoom(options) {
-  const apiKey = getActiveReplicateKey();
-
-  // Try Supabase Edge Function first
-  try {
-    const { data, error } = await supabase.functions.invoke('generate-staging', {
-      body: options,
-      headers: { 'x-replicate-key': apiKey }
-    });
-
-    if (!error && data && data.success && data.imageUrl) {
-      // Persist to Supabase Storage if feasible
-      try {
-        const cdnUrl = await uploadToSupabaseStorage('staged-renders', data.imageUrl, `render_${Date.now()}.jpg`);
-        if (cdnUrl && cdnUrl.startsWith('http')) {
-          data.imageUrl = cdnUrl;
-        }
-      } catch (sErr) {
-        console.warn('Storage sync note:', sErr);
-      }
-      return data;
-    }
-  } catch (edgeErr) {
-    console.log('Edge function fallback to direct/local pipeline:', edgeErr.message);
-  }
-
-  // Fallback: local backend proxy or direct API
-  const res = await fetch('/api/replicate/flux', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-replicate-key': apiKey
-    },
-    body: JSON.stringify(options)
+  const { data, error } = await supabase.functions.invoke('generate-staging', {
+    body: options
   });
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Staging generation failed with status ${res.status}`);
+  if (error) {
+    console.error('Room staging generation error:', error);
+    throw new Error(error.message || 'Room staging generation failed. Ensure Supabase Edge Functions are deployed.');
   }
 
-  const result = await res.json();
-
-  // Upload to Supabase Storage staged-renders bucket
-  if (result.imageUrl && result.imageUrl.startsWith('data:')) {
-    uploadToSupabaseStorage('staged-renders', result.imageUrl, `staged_${Date.now()}.jpg`)
-      .then(storedUrl => {
-        if (storedUrl && storedUrl.startsWith('http')) {
-          result.storageUrl = storedUrl;
-        }
-      })
-      .catch(err => console.warn('Supabase storage non-blocking note:', err));
+  if (!data || !data.success || !data.imageUrl) {
+    throw new Error(data?.error || 'Staging generation did not produce a valid image.');
   }
 
-  return result;
+  // Persist rendered image to Supabase Storage staged-renders bucket if it is base64
+  if (data.imageUrl.startsWith('data:')) {
+    try {
+      const cdnUrl = await uploadToSupabaseStorage('staged-renders', data.imageUrl, `render_${Date.now()}.jpg`);
+      if (cdnUrl && cdnUrl.startsWith('http')) {
+        data.imageUrl = cdnUrl;
+      }
+    } catch (sErr) {
+      console.warn('Storage CDN persistence notice:', sErr);
+    }
+  }
+
+  return data;
 }

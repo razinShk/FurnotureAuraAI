@@ -63,21 +63,7 @@ export default function SuperAdminPage({ onNavigate }) {
       });
       return;
     } catch (sErr) {
-      console.log('Supabase admin telemetry note:', sErr);
-    }
-
-    // Fallback: local backend endpoint
-    try {
-      const res = await fetch('/api/admin/metrics');
-      if (res.ok) {
-        const data = await res.json();
-        setMetrics(data.stats);
-        setUsers(data.users || []);
-        setStores(data.stores || []);
-        setLogs(data.predictionLogs || []);
-      }
-    } catch (e) {
-      console.warn('Backend metrics fallback note:', e);
+      console.warn('Supabase admin telemetry notice:', sErr.message);
     }
   };
 
@@ -86,15 +72,9 @@ export default function SuperAdminPage({ onNavigate }) {
       const targetUser = users.find(u => u.id === userId);
       const newCredits = Math.max(0, (targetUser?.credits || 0) + Number(creditsToAdd));
 
-      // Update in Supabase
-      await supabase.from('profiles').update({ credits: newCredits }).eq('id', userId);
-
-      // Also call local API if available
-      fetch('/api/admin/credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, creditsToAdd })
-      }).catch(() => {});
+      // Update directly in Supabase
+      const { error } = await supabase.from('profiles').update({ credits: newCredits }).eq('id', userId);
+      if (error) throw error;
 
       setUsers(prev => prev.map(u => (u.id === userId ? { ...u, credits: newCredits } : u)));
       showFeedback(`Updated credits for ${targetUser?.name || 'User'}: ${newCredits} remaining`);
@@ -109,15 +89,9 @@ export default function SuperAdminPage({ onNavigate }) {
     const targetTotal = Number(customCreditInput);
 
     try {
-      // Update in Supabase
-      await supabase.from('profiles').update({ credits: targetTotal }).eq('id', customCreditModalUser.id);
-
-      // Also call local API if available
-      fetch('/api/admin/credits', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: customCreditModalUser.id, setTotal: targetTotal })
-      }).catch(() => {});
+      // Update directly in Supabase
+      const { error } = await supabase.from('profiles').update({ credits: targetTotal }).eq('id', customCreditModalUser.id);
+      if (error) throw error;
 
       setUsers(prev => prev.map(u => (u.id === customCreditModalUser.id ? { ...u, credits: targetTotal } : u)));
       showFeedback(`Set exact credits for ${customCreditModalUser.name} to ${targetTotal}`);
@@ -140,24 +114,24 @@ export default function SuperAdminPage({ onNavigate }) {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
-      {/* Top Admin Header (White Theme Default) */}
-      <section className="pt-8 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full border-b border-slate-200 dark:border-slate-900">
+    <div className="min-h-screen bg-[#faf8f5] dark:bg-[#121110] text-stone-900 dark:text-stone-100 flex flex-col transition-colors duration-200">
+      {/* Top Admin Header */}
+      <section className="pt-8 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full border-b border-stone-200 dark:border-stone-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-600/20 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400 shadow-sm">
               <Shield size={24} />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 dark:text-white tracking-tight font-serif">
                   Super Admin Console
                 </h1>
-                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-extrabold border border-indigo-200 dark:border-indigo-500/30">
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-extrabold border border-brand-200 dark:border-brand-500/30">
                   Global Telemetry & Credits
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
                 Oversee platform users, manage AI credit balances, inspect store billers, and track Replicate pipelines.
               </p>
             </div>
@@ -166,14 +140,14 @@ export default function SuperAdminPage({ onNavigate }) {
           <div className="flex items-center gap-2">
             <button
               onClick={fetchAdminMetrics}
-              className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-white hover:bg-stone-50 dark:bg-stone-900 dark:hover:bg-stone-800 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <RefreshCw size={13} />
               <span>Refresh Metrics</span>
             </button>
             <button
               onClick={() => onNavigate('studio')}
-              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors shadow-md shadow-indigo-600/20"
+              className="px-4 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white text-xs font-bold transition-colors shadow-md shadow-brand-500/25"
             >
               Back to Studio
             </button>
@@ -190,19 +164,19 @@ export default function SuperAdminPage({ onNavigate }) {
 
         {/* 4 System Metric Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-1">
               <span>Total Active Users</span>
-              <Users size={16} className="text-indigo-600 dark:text-indigo-400" />
+              <Users size={16} className="text-brand-600 dark:text-brand-400" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{users.length}</div>
-            <div className="text-[10px] text-slate-400 mt-1">Customers & Store Billers</div>
+            <div className="text-2xl font-extrabold text-stone-900 dark:text-white font-serif">{users.length}</div>
+            <div className="text-[10px] text-stone-400 mt-1">Customers & Store Billers</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-1">
               <span>Total AI Credits Allocated</span>
-              <Sparkles size={16} className="text-amber-600 dark:text-amber-400" />
+              <Sparkles size={16} className="text-brand-600 dark:text-brand-400" />
             </div>
             <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400">
               {users.reduce((acc, u) => acc + (u.credits || 0), 0).toLocaleString()}
@@ -243,21 +217,21 @@ export default function SuperAdminPage({ onNavigate }) {
             </div>
 
             <div className="relative w-full sm:w-72">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 type="text"
                 placeholder="Search user by name, email, or role..."
                 value={searchUserQuery}
                 onChange={(e) => setSearchUserQuery(e.target.value)}
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600 shadow-sm"
+                className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 shadow-sm"
               />
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 dark:bg-slate-950/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider text-[10px]">
+                <thead className="bg-stone-50 dark:bg-stone-950/80 border-b border-stone-200 dark:border-stone-800 text-stone-500 dark:text-stone-400 font-extrabold uppercase tracking-wider text-[10px]">
                   <tr>
                     <th className="px-6 py-4">User</th>
                     <th className="px-6 py-4">Role</th>
@@ -267,43 +241,43 @@ export default function SuperAdminPage({ onNavigate }) {
                     <th className="px-6 py-4 text-right">Credit Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80">
+                <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                      <td colSpan={6} className="px-6 py-12 text-center text-stone-400">
                         No registered users yet. As users authenticate via Clerk, their profiles sync here.
                       </td>
                     </tr>
                   ) : (
                     filteredUsers.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                      <tr key={u.id} className="hover:bg-stone-50 dark:hover:bg-stone-800/30 transition-colors">
                         <td className="px-6 py-4">
-                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <div className="font-bold text-stone-900 dark:text-white flex items-center gap-2">
                             <span>{u.name || u.email?.split('@')[0] || 'User'}</span>
                             {u.role === 'admin' && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" title="Super Admin" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand-500" title="Super Admin" />
                             )}
                           </div>
-                          <div className="text-[11px] text-slate-500">{u.email}</div>
+                          <div className="text-[11px] text-stone-500">{u.email}</div>
                         </td>
 
                         <td className="px-6 py-4">
                           <span
                             className={`px-2.5 py-1 rounded-full font-bold text-[10px] uppercase border ${
                               u.role === 'admin'
-                                ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/40'
+                                ? 'bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 border-brand-200 dark:border-brand-500/40'
                                 : u.role === 'biller'
                                   ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700'
                             }`}
                           >
                             {u.role}
                           </span>
                         </td>
 
-                        <td className="px-6 py-4 text-slate-600 dark:text-slate-300 font-medium">{u.plan || 'Free Explorer'}</td>
+                        <td className="px-6 py-4 text-stone-600 dark:text-stone-300 font-medium">{u.plan || 'Free Explorer'}</td>
 
-                        <td className="px-6 py-4 font-mono text-slate-500 dark:text-slate-400">{u.total_generations || u.totalGenerations || 0}</td>
+                        <td className="px-6 py-4 font-mono text-stone-500 dark:text-stone-400">{u.total_generations || u.totalGenerations || 0}</td>
 
                         <td className="px-6 py-4">
                           <div className="font-extrabold text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
@@ -323,7 +297,7 @@ export default function SuperAdminPage({ onNavigate }) {
                             </button>
                             <button
                               onClick={() => handleAdjustCredits(u.id, 200)}
-                              className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 text-[11px] font-bold transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-brand-50 dark:bg-brand-500/10 hover:bg-brand-100 dark:hover:bg-brand-500/20 text-brand-700 dark:text-brand-400 border border-brand-200 dark:border-brand-500/30 text-[11px] font-bold transition-colors"
                               title="Add 200 Credits"
                             >
                               +200
@@ -333,7 +307,7 @@ export default function SuperAdminPage({ onNavigate }) {
                                 setCustomCreditModalUser(u);
                                 setCustomCreditInput(String(u.credits || 0));
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-semibold transition-colors"
+                              className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-[11px] font-semibold transition-colors"
                             >
                               Set...
                             </button>
@@ -438,18 +412,18 @@ export default function SuperAdminPage({ onNavigate }) {
                   ) : (
                     logs.map((log) => (
                       <tr key={log.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td className="px-6 py-3 font-mono font-bold text-indigo-700 dark:text-indigo-300 text-[11px]">
+                        <td className="px-6 py-3 font-mono font-bold text-brand-700 dark:text-brand-300 text-[11px]">
                           {log.model}
                         </td>
-                        <td className="px-6 py-3 text-slate-700 dark:text-slate-300">{log.task}</td>
+                        <td className="px-6 py-3 text-stone-700 dark:text-stone-300">{log.task}</td>
                         <td className="px-6 py-3">
                           <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold text-[10px] border border-emerald-200 dark:border-emerald-500/30">
                             {log.status || 'succeeded'}
                           </span>
                         </td>
-                        <td className="px-6 py-3 font-mono text-slate-500 dark:text-slate-400">{log.duration_ms || log.durationMs || 1420}ms</td>
+                        <td className="px-6 py-3 font-mono text-stone-500 dark:text-stone-400">{log.duration_ms || log.durationMs || 1420}ms</td>
                         <td className="px-6 py-3 font-bold text-amber-600 dark:text-amber-400">-{log.credits_cost || log.creditsCost || 2} cr</td>
-                        <td className="px-6 py-3 text-right text-slate-400 font-mono text-[11px]">
+                        <td className="px-6 py-3 text-right text-stone-400 font-mono text-[11px]">
                           {log.created_at ? new Date(log.created_at).toLocaleTimeString() : 'Just now'}
                         </td>
                       </tr>
@@ -462,14 +436,14 @@ export default function SuperAdminPage({ onNavigate }) {
         </div>
       </section>
 
-      {/* Set Custom Credits Modal (White Theme Default) */}
+      {/* Set Custom Credits Modal */}
       {customCreditModalUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/85 backdrop-blur-md">
-          <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-6 space-y-4">
-            <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 dark:bg-black/85 backdrop-blur-md">
+          <div className="relative w-full max-w-sm bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl overflow-hidden shadow-2xl p-6 space-y-4">
+            <h3 className="font-extrabold text-base text-stone-900 dark:text-white font-serif">
               Set Exact Credits for {customCreditModalUser.name}
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Current balance: <span className="text-amber-600 dark:text-amber-400 font-bold">{customCreditModalUser.credits || 0}</span>
             </p>
 
@@ -480,20 +454,20 @@ export default function SuperAdminPage({ onNavigate }) {
                 required
                 value={customCreditInput}
                 onChange={(e) => setCustomCreditInput(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-base font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-4 py-2.5 text-base font-bold text-stone-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm"
               />
 
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setCustomCreditModalUser(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300"
+                  className="px-4 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md shadow-indigo-600/20"
+                  className="px-5 py-2 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white text-xs font-bold shadow-md shadow-brand-500/25 transition-all"
                 >
                   Apply Credits
                 </button>

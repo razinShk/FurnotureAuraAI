@@ -215,42 +215,42 @@ export default function BillerAdminPage({ currentUser, onNavigate }) {
 
         {/* 4 Metric Cards (Clean Production Analytics) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-2">
               <span>Customer Staging Sessions</span>
-              <Eye size={16} className="text-indigo-600 dark:text-indigo-400" />
+              <Eye size={16} className="text-brand-600 dark:text-brand-400" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{stagingEvents.length}</div>
-            <div className="text-[11px] text-slate-400 mt-1">Live customer room placements</div>
+            <div className="text-2xl font-extrabold text-stone-900 dark:text-white">{stagingEvents.length}</div>
+            <div className="text-[11px] text-stone-400 mt-1">Live customer room placements</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-2">
               <span>Active Catalog Pieces</span>
               <ShoppingBag size={16} className="text-amber-600 dark:text-amber-400" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{catalog.length}</div>
-            <div className="text-[11px] text-slate-400 mt-1">Available for 1-click room staging</div>
+            <div className="text-2xl font-extrabold text-stone-900 dark:text-white">{catalog.length}</div>
+            <div className="text-[11px] text-stone-400 mt-1">Available for 1-click room staging</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-2">
               <span>Customer Inquiries & Quotes</span>
               <Users size={16} className="text-emerald-600 dark:text-emerald-400" />
             </div>
             <div className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">
               {stagingEvents.filter(e => e.action === 'inquired_quote').length}
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">Staged-to-consultation leads</div>
+            <div className="text-[11px] text-stone-400 mt-1">Staged-to-consultation leads</div>
           </div>
 
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-2">
+          <div className="p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm">
+            <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-2">
               <span>Store AI Credits Balance</span>
-              <Sparkles size={16} className="text-violet-600 dark:text-violet-400" />
+              <Sparkles size={16} className="text-brand-600 dark:text-brand-400" />
             </div>
-            <div className="text-2xl font-extrabold text-slate-900 dark:text-white">{currentStore.credits || currentUser?.credits || 850}</div>
-            <div className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold mt-1">Retailer Quota Active</div>
+            <div className="text-2xl font-extrabold text-stone-900 dark:text-white">{currentStore.credits || currentUser?.credits || 850}</div>
+            <div className="text-[11px] text-brand-600 dark:text-brand-400 font-semibold mt-1">Retailer Quota Active</div>
           </div>
         </div>
 
@@ -351,7 +351,7 @@ export default function BillerAdminPage({ currentUser, onNavigate }) {
                                 <CheckCircle size={12} /> Consultation Inquired
                               </span>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/30 font-bold text-[10px] flex items-center gap-1 w-fit">
+                              <span className="px-2.5 py-1 rounded-full bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-500/30 font-bold text-[10px] flex items-center gap-1 w-fit">
                                 <Sparkles size={12} /> Staged in Room
                               </span>
                             )}

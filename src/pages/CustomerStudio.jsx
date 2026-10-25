@@ -55,6 +55,7 @@ import {
   getRecentCreations,
   deleteRecentCreation
 } from '../utils/studioStorage';
+import { useToast } from '../context/ToastContext';
 
 const DEMO_ROOMS = [
   {
@@ -78,6 +79,8 @@ export default function CustomerStudio({
   onNavigate,
   onRequireAuth
 }) {
+  const { toast } = useToast();
+
   // Canvas & Stage Refs
   const roomCanvasRef = useRef(null);
   const beforeCanvasRef = useRef(null);
@@ -413,6 +416,7 @@ export default function CustomerStudio({
         setComponentPins(data.components);
         setSelectedPinId(data.components[0].id);
         setStatusBanner(`✅ Detected ${data.components.length} architectural spots! Select a tag to stage furniture.`);
+        toast.success(`Spatial Vision: Detected ${data.components.length} architectural spots!`);
       } else {
         // Fallback default pins
         const defaultPins = [
@@ -422,10 +426,12 @@ export default function CustomerStudio({
         setComponentPins(defaultPins);
         setSelectedPinId(defaultPins[0].id);
         setStatusBanner('Tap any spot tag to stage furniture, or drag to reposition.');
+        toast.info('Default staging spots placed. Tap "+ Tag Spot" to customize placement.');
       }
     } catch (e) {
       console.warn('Vision analysis error:', e);
       setStatusBanner('Room loaded. Tap "+ Tag Spot" to select an area for furniture staging.');
+      toast.info('Room loaded. Tap "+ Tag Spot" to select an area for furniture staging.');
     } finally {
       hideLoading();
     }
@@ -489,6 +495,7 @@ export default function CustomerStudio({
     // 1. AUTHENTICATION ENFORCEMENT
     if (!currentUser) {
       setStatusBanner('🔒 Please sign in or create an account to stage furniture.');
+      toast.info('Please sign in or create an account to stage furniture.');
       if (onRequireAuth) onRequireAuth();
       return;
     }
@@ -496,21 +503,25 @@ export default function CustomerStudio({
     // 2. CREDIT BALANCE ENFORCEMENT (2 credits required for staging)
     if (currentUser.credits !== null && currentUser.credits < 2) {
       setStatusBanner('⚠️ Insufficient AI credits (2 credits required). Please top up credits or upgrade plan.');
+      toast.error('Insufficient AI credits (2 credits required).');
       return;
     }
 
     const pin = componentPins.find(p => p.id === selectedPinId);
     if (!pin) {
       setStatusBanner('⚠️ Please select a room spot first or click "+ Tag Spot".');
+      toast.info('Please select a room spot first or click "+ Tag Spot".');
       return;
     }
 
     if (activeOption === 'B' && !customPromptText.trim()) {
       setStatusBanner('⚠️ Please type a furniture description for Option B first.');
+      toast.info('Please type a furniture description first.');
       return;
     }
     if (activeOption === 'C' && !uploadedReferenceBase64) {
       setStatusBanner('⚠️ Please upload a reference furniture or tile image for Option C first.');
+      toast.info('Please upload a reference furniture image first.');
       return;
     }
 
@@ -641,20 +652,24 @@ export default function CustomerStudio({
 
           hideLoading();
           setStatusBanner(`✨ Staged "${pin.name}" with photorealistic neural lighting! Saved to Recent Creations.`);
+          toast.success(`Staged "${pin.name}" with photorealistic neural lighting!`);
         };
         genImg.onerror = () => {
           hideLoading();
           setStatusBanner('Render complete, but image failed to load onto canvas.');
+          toast.error('Render completed, but image failed to load onto canvas.');
         };
         genImg.src = data.imageUrl;
       } else {
         hideLoading();
-        setStatusBanner('AI generation returned empty render. Please check your Replicate key.');
+        setStatusBanner('AI generation returned empty render. Please try again.');
+        toast.error('AI generation returned empty render. Please try again.');
       }
     } catch (e) {
       hideLoading();
       console.error('Staging error:', e);
-      setStatusBanner('❌ Staging error: ' + (e.message || 'Check Replicate API key in Settings.'));
+      setStatusBanner('❌ Staging error: ' + (e.message || 'Generation failed.'));
+      toast.error(e.message || 'Staging failed. Please try again.');
     }
   };
 
@@ -664,11 +679,13 @@ export default function CustomerStudio({
   const runAIOutpaint = async () => {
     if (!currentUser) {
       setStatusBanner('🔒 Sign in required to use AI room outpainting.');
+      toast.info('Sign in required to use AI room outpainting.');
       if (onRequireAuth) onRequireAuth();
       return;
     }
     if (currentUser.credits !== null && currentUser.credits < 1) {
       setStatusBanner('⚠️ Insufficient AI credits (1 credit required for AI Expand).');
+      toast.error('Insufficient AI credits (1 credit required).');
       return;
     }
 
@@ -699,6 +716,7 @@ export default function CustomerStudio({
       if (onDeductCredits) onDeductCredits(1);
       hideLoading();
       setStatusBanner('✨ Room expanded seamlessly with AI Outpainting!');
+      toast.success('Room expanded seamlessly with AI Outpainting!');
     }, 1200);
   };
 
@@ -866,17 +884,17 @@ export default function CustomerStudio({
           </button>
 
           <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-amber-500 text-white font-extrabold text-xs flex items-center justify-center shadow-sm">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm">
               FA
             </span>
             <div className="hidden sm:block">
-              <div className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight flex items-center gap-1.5">
+              <div className="text-xs font-serif font-bold text-stone-900 dark:text-stone-100 leading-tight flex items-center gap-1.5">
                 <span>AI Spatial Studio</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold border border-indigo-200 dark:border-indigo-500/30">
+                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-bold border border-brand-200 dark:border-brand-500/30">
                   PRO
                 </span>
               </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[140px]">
+              <div className="text-xs text-stone-500 dark:text-stone-400 truncate max-w-[140px]">
                 {roomTitle}
               </div>
             </div>
@@ -889,13 +907,13 @@ export default function CustomerStudio({
           {/* Recent Creations Button */}
           <button
             onClick={() => setIsRecentCreationsOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 shadow-sm transition-all"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-stone-50 dark:bg-stone-900 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-200 font-semibold text-xs flex items-center gap-1.5 border border-stone-200 dark:border-stone-800 shadow-sm transition-all"
             title="View Recent Staged Creations"
           >
-            <FolderHeart size={14} className="text-indigo-600 dark:text-indigo-400" />
+            <FolderHeart size={14} className="text-brand-600 dark:text-brand-400" />
             <span className="hidden sm:inline">Creations</span>
             {recentCreations.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-extrabold">
+              <span className="px-1.5 py-0.2 rounded-full bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-[10px] font-bold">
                 {recentCreations.length}
               </span>
             )}
@@ -910,7 +928,7 @@ export default function CustomerStudio({
                 if (onRequireAuth) onRequireAuth();
               }
             }}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-600/20 transition-all shrink-0"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-500/20 transition-all shrink-0"
           >
             <Upload size={13} />
             <span className="hidden xs:inline">Upload</span>
@@ -968,7 +986,7 @@ export default function CustomerStudio({
                     }
                     loadRoomImage(room.url, room.name);
                   }}
-                  className="w-full px-3.5 py-2 text-left text-xs text-slate-700 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-600/20 hover:text-indigo-600 dark:hover:text-white transition-colors"
+                  className="w-full px-3.5 py-2 text-left text-xs text-stone-700 dark:text-stone-300 hover:bg-brand-50 dark:hover:bg-brand-950/40 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
                 >
                   {room.name}
                 </button>
@@ -1049,29 +1067,29 @@ export default function CustomerStudio({
         {/* ---------------------------------------------------------------------
             COLUMN 1: THE LIVING ROOM CANVAS STAGE
             --------------------------------------------------------------------- */}
-        <div className="flex-1 flex flex-col bg-slate-100/80 dark:bg-slate-950 overflow-hidden relative">
+        <div className="flex-1 flex flex-col bg-[#f7f5f0] dark:bg-[#121110] overflow-hidden relative">
           
           {/* Status Sub-bar */}
-          <div className="px-3 sm:px-4 py-2 bg-white/90 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 backdrop-blur-sm">
+          <div className="px-3 sm:px-4 py-2 bg-white/90 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800/80 flex items-center justify-between text-xs text-stone-600 dark:text-stone-400 backdrop-blur-sm">
             <div className="flex items-center gap-2 overflow-hidden">
-              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse shrink-0" />
-              <span className="text-[11px] sm:text-xs text-slate-700 dark:text-slate-300 truncate">{statusBanner}</span>
+              <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse shrink-0" />
+              <span className="text-xs text-stone-700 dark:text-stone-300 truncate">{statusBanner}</span>
             </div>
 
             {currentRoomUrl && (
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md">
                   <input
                     type="checkbox"
                     checked={showPins}
                     onChange={(e) => setShowPins(e.target.checked)}
-                    className="rounded accent-indigo-600"
+                    className="rounded accent-[#c59b63]"
                   />
                   <span className="font-semibold">Boxes & Tags</span>
                 </label>
                 <button
                   onClick={() => runSpatialVisionAnalysis()}
-                  className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 font-bold flex items-center gap-1"
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-bold flex items-center gap-1"
                   title="Re-scan spatial room tags with AI"
                 >
                   <RefreshCw size={11} />
@@ -1083,35 +1101,35 @@ export default function CustomerStudio({
 
           {/* Canvas Viewport Area */}
           <div
-            className="flex-1 flex items-center justify-center p-2 sm:p-5 overflow-hidden relative bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] dark:[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] min-h-[320px] sm:min-h-[420px]"
+            className="flex-1 flex items-center justify-center p-2 sm:p-5 overflow-hidden relative canvas-dots min-h-[320px] sm:min-h-[420px]"
             onClick={handleStageClick}
           >
             {/* Clean Initial Dropzone (When no room is loaded) */}
             {!currentRoomUrl ? (
-              <div className="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center shadow-xl space-y-4 mx-3 my-4">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-inner">
+              <div className="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-center shadow-xl space-y-4 mx-3 my-4">
+                <div className="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto shadow-inner">
                   <ImageIcon size={32} />
                 </div>
-                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">
+                <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">
                   Spatial AI Furniture Staging
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
                   Snap or upload any living room photo. Our neural spatial model detects furniture coordinates and stages real showroom pieces with realistic ambient shadows.
                 </p>
 
                 {/* Authentication Banner if not signed in */}
                 {!currentUser && (
                   <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-left space-y-2">
-                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-extrabold text-xs">
+                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-bold text-xs">
                       <Lock size={15} />
                       <span>Sign In Required</span>
                     </div>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
                       Sign in or create an account to stage furniture. You will receive <strong>100 free starter AI credits</strong>!
                     </p>
                     <button
                       onClick={() => onRequireAuth && onRequireAuth()}
-                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
                     >
                       <LogIn size={14} />
                       <span>Sign In / Create Account (100 Free Credits)</span>
@@ -1128,7 +1146,7 @@ export default function CustomerStudio({
                         if (onRequireAuth) onRequireAuth();
                       }
                     }}
-                    className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/25 transition-all"
+                    className="px-5 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-500/25 transition-all"
                   >
                     <Upload size={16} />
                     <span>Upload Room Photo</span>
@@ -1200,7 +1218,7 @@ export default function CustomerStudio({
 
                 {/* Before Overlay for Split Comparison */}
                 <div
-                  className={`absolute inset-0 overflow-hidden pointer-events-none border-r-2 border-indigo-500 z-20 ${
+                  className={`absolute inset-0 overflow-hidden pointer-events-none border-r-2 border-brand-500 z-20 ${
                     isBeforeAfterOpen || isPeekingOriginal ? 'block' : 'hidden'
                   }`}
                   style={{ width: isPeekingOriginal ? '100%' : `${splitSliderVal}%` }}
@@ -1212,7 +1230,7 @@ export default function CustomerStudio({
                       width: roomCanvasRef.current ? `${roomCanvasRef.current.clientWidth}px` : '100%'
                     }}
                   />
-                  <div className="absolute top-3 left-3 bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-md">
+                  <div className="absolute top-3 left-3 bg-stone-950/85 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-md">
                     BEFORE (ORIGINAL)
                   </div>
                 </div>
@@ -1237,7 +1255,7 @@ export default function CustomerStudio({
                               e.stopPropagation();
                               setSelectedPinId(pin.id);
                             }}
-                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer border-2 border-dashed border-indigo-500 bg-indigo-500/15 shadow-[0_0_25px_rgba(99,102,241,0.4)] ring-2 ring-white/60 z-35"
+                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer border-2 border-dashed border-brand-500 bg-brand-500/15 shadow-[0_0_25px_rgba(197,155,99,0.35)] ring-2 ring-white/60 z-35"
                             style={{
                               left: `${pin.x}%`,
                               top: `${pin.y}%`,
@@ -1246,13 +1264,13 @@ export default function CustomerStudio({
                             }}
                           >
                             {/* Corner bounding accents */}
-                            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-amber-400" />
-                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-amber-400" />
-                            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-amber-400" />
-                            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-amber-400" />
+                            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-brand-400" />
+                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-brand-400" />
+                            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-brand-400" />
+                            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-brand-400" />
                             
                             {/* Dimension label tag (selected item) */}
-                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-slate-950/85 backdrop-blur-md text-[9px] font-mono font-bold text-amber-300 whitespace-nowrap shadow-md select-none border border-slate-700">
+                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-stone-950/85 backdrop-blur-md text-[9px] font-mono font-bold text-brand-300 whitespace-nowrap shadow-md select-none border border-stone-700">
                               {w}% × {h}% • {pin.name}
                             </div>
                           </div>
@@ -1263,13 +1281,13 @@ export default function CustomerStudio({
                           onPointerDown={(e) => handlePinPointerDown(e, pin)}
                           className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-extrabold flex items-center gap-1.5 shadow-xl transition-all select-none pointer-events-auto ${
                             isSelected
-                              ? 'bg-indigo-600 text-white ring-4 ring-indigo-500/40 scale-110 z-40'
-                              : 'bg-white/95 dark:bg-slate-900/90 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700/80 hover:scale-105 z-30'
+                              ? 'bg-brand-500 text-white ring-4 ring-brand-500/35 scale-110 z-40'
+                              : 'bg-white/95 dark:bg-stone-900/90 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700/80 hover:scale-105 z-30'
                           }`}
                           style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
                         >
                           <span
-                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-400 animate-pulse' : 'bg-indigo-600'}`}
+                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-300 animate-pulse' : 'bg-brand-500'}`}
                           />
                           <span className="max-w-[120px] sm:max-w-[160px] truncate">{pin.name}</span>
                           <span className="text-[9px] opacity-60">✥</span>
@@ -1282,13 +1300,13 @@ export default function CustomerStudio({
                 {/* Floating Canvas Quick Controls Bar (Mobile & Desktop) */}
                 <div className="absolute bottom-3 inset-x-3 z-30 flex items-center justify-between pointer-events-none">
                   {/* Left: Tag Spot & Expand Pill */}
-                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-lg">
+                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-stone-900/90 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
                     <button
                       onClick={() => setAddPinMode(!addPinMode)}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
                         addPinMode
-                          ? 'bg-amber-500 text-slate-950 shadow-md'
-                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          ? 'bg-brand-500 text-white shadow-md'
+                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
                       }`}
                       title="Click anywhere on canvas to tag a new furniture spot"
                     >
@@ -1298,22 +1316,22 @@ export default function CustomerStudio({
 
                     <button
                       onClick={runAIOutpaint}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors"
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors"
                       title="Expand room walls and flooring with AI Outpainting"
                     >
-                      <Maximize2 size={13} className="text-violet-500" />
+                      <Maximize2 size={13} className="text-brand-500" />
                       <span className="hidden sm:inline">AI Expand</span>
                     </button>
                   </div>
 
                   {/* Right: Compare & Hold Pill */}
-                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-lg">
+                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-stone-900/90 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
                     <button
                       onClick={() => setIsBeforeAfterOpen(!isBeforeAfterOpen)}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
                         isBeforeAfterOpen
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          ? 'bg-brand-500 text-white shadow-sm'
+                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
                       }`}
                       title="Split screen Before / After"
                     >
@@ -1327,7 +1345,7 @@ export default function CustomerStudio({
                       onMouseLeave={() => setIsPeekingOriginal(false)}
                       onTouchStart={() => setIsPeekingOriginal(true)}
                       onTouchEnd={() => setIsPeekingOriginal(false)}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors select-none"
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors select-none"
                       title="Hold to peek at original v1 room"
                     >
                       <Eye size={13} className="text-emerald-500" />
@@ -1338,13 +1356,13 @@ export default function CustomerStudio({
 
                 {/* AI Processing Overlay & Laser Scanner */}
                 {isAILoading && (
-                  <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center">
+                  <div className="absolute inset-0 bg-white/95 dark:bg-stone-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center">
                     <div className="ai-scanner-bar" />
-                    <div className="w-14 h-14 rounded-3xl bg-indigo-50 dark:bg-indigo-600/30 border border-indigo-200 dark:border-indigo-400/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-2xl mb-3 shadow-xl shadow-indigo-600/20 animate-bounce">
+                    <div className="w-14 h-14 rounded-3xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-2xl mb-3 shadow-xl shadow-brand-500/20 animate-bounce">
                       ✨
                     </div>
-                    <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white mb-1">{aiLoadingTitle}</h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">{aiLoadingSubtitle}</p>
+                    <h3 className="font-extrabold text-base sm:text-lg text-stone-900 dark:text-white mb-1 font-serif">{aiLoadingTitle}</h3>
+                    <p className="text-xs text-stone-500 dark:text-stone-400 max-w-sm">{aiLoadingSubtitle}</p>
                   </div>
                 )}
               </div>
@@ -1352,9 +1370,9 @@ export default function CustomerStudio({
           </div>
 
           {/* Version History Stack Bar */}
-          <div className="px-3 sm:px-5 py-2 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 overflow-x-auto shrink-0">
+          <div className="px-3 sm:px-5 py-2 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3 overflow-x-auto shrink-0">
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 flex items-center gap-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1">
                 <Clock size={12} /> Versions:
               </span>
               <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -1364,8 +1382,8 @@ export default function CustomerStudio({
                     onClick={() => rollbackToVersion(idx)}
                     className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
                       idx === activeVersionIndex
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                        : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
                     }`}
                   >
                     {ver.label}
@@ -1373,7 +1391,7 @@ export default function CustomerStudio({
                 ))}
               </div>
             </div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold shrink-0 hidden md:block">
+            <div className="text-[11px] text-stone-500 dark:text-stone-400 font-semibold shrink-0 hidden md:block">
               {versionHistory[activeVersionIndex]?.label}
             </div>
           </div>
@@ -1391,8 +1409,8 @@ export default function CustomerStudio({
               <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-600" />
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+                    <span className="w-2 h-2 rounded-full bg-brand-500" />
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400">
                       Target Room Spot
                     </span>
                   </div>
@@ -1405,7 +1423,7 @@ export default function CustomerStudio({
                         setSelectedPinId(e.target.value);
                         setIsEditingPinName(false);
                       }}
-                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:border-indigo-600 max-w-[150px] truncate"
+                      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-2 py-1 text-[11px] font-bold text-stone-800 dark:text-stone-200 focus:outline-none focus:border-brand-500 max-w-[150px] truncate"
                     >
                       {componentPins.map(p => (
                         <option key={p.id} value={p.id}>
@@ -1432,12 +1450,12 @@ export default function CustomerStudio({
                 </div>
 
                 {/* Spot Name In-Place Editor */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/90 shadow-sm flex flex-col gap-2">
+                <div className="p-2.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800/90 shadow-sm flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Spot Label & Role</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Spot Label & Role</span>
                     <button
                       onClick={() => setIsEditingPinName(!isEditingPinName)}
-                      className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 font-semibold"
+                      className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 font-semibold"
                     >
                       {isEditingPinName ? (
                         <>
@@ -1469,19 +1487,19 @@ export default function CustomerStudio({
                           if (e.key === 'Enter') setIsEditingPinName(false);
                         }}
                         placeholder="e.g. Master Velvet Sofa, Reading Corner Armchair"
-                        className="flex-1 bg-slate-50 dark:bg-slate-800 border border-indigo-400 dark:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-slate-900 dark:text-white focus:outline-none ring-2 ring-indigo-500/20"
+                        className="flex-1 bg-stone-50 dark:bg-stone-800 border border-brand-400 dark:border-brand-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-stone-900 dark:text-white focus:outline-none ring-2 ring-brand-500/20"
                       />
                       <button
                         onClick={() => setIsEditingPinName(false)}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0 hover:bg-indigo-700 transition-colors"
+                        className="px-2.5 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-bold shrink-0 hover:bg-brand-600 transition-colors"
                       >
                         Save
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-100">
+                    <div className="flex items-center justify-between text-xs font-bold text-stone-800 dark:text-stone-100">
                       <span className="truncate">{selectedPin.name}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-extrabold uppercase shrink-0">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-extrabold uppercase shrink-0">
                         {selectedPin.category}
                       </span>
                     </div>
@@ -1489,11 +1507,11 @@ export default function CustomerStudio({
                 </div>
 
                 {/* Spot Dimensions Tuning */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800/80">
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-stone-200 dark:border-stone-800/80">
                   <div>
-                    <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                    <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
                       <span>Width Scale</span>
-                      <span className="font-bold text-slate-800 dark:text-white">{selectedPin.boxW}%</span>
+                      <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxW}%</span>
                     </div>
                     <input
                       type="range"
@@ -1506,13 +1524,13 @@ export default function CustomerStudio({
                           prev.map(p => (p.id === selectedPin.id ? { ...p, boxW: val } : p))
                         );
                       }}
-                      className="w-full accent-indigo-600 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg"
+                      className="w-full accent-brand-500 h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
                     />
                   </div>
                   <div>
-                    <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-1">
+                    <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
                       <span>Height Scale</span>
-                      <span className="font-bold text-slate-800 dark:text-white">{selectedPin.boxH}%</span>
+                      <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxH}%</span>
                     </div>
                     <input
                       type="range"
@@ -1525,7 +1543,7 @@ export default function CustomerStudio({
                           prev.map(p => (p.id === selectedPin.id ? { ...p, boxH: val } : p))
                         );
                       }}
-                      className="w-full accent-indigo-600 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg"
+                      className="w-full accent-brand-500 h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
                     />
                   </div>
                 </div>
@@ -1534,16 +1552,16 @@ export default function CustomerStudio({
 
             {/* Staging Method Segmented Switcher (Option A, B, C) */}
             <div>
-              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+              <div className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2">
                 Staging Method
               </div>
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                 <button
                   onClick={() => setActiveOption('A')}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'A'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-slate-800'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
                   <Store size={15} />
@@ -1554,8 +1572,8 @@ export default function CustomerStudio({
                   onClick={() => setActiveOption('B')}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'B'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-slate-800'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
                   <Sparkles size={15} />
@@ -1566,8 +1584,8 @@ export default function CustomerStudio({
                   onClick={() => setActiveOption('C')}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'C'
-                      ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200 dark:border-slate-800'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
                   <Camera size={15} />
@@ -1586,7 +1604,7 @@ export default function CustomerStudio({
                     value={catalogSearch}
                     onChange={(e) => setCatalogSearch(e.target.value)}
                     placeholder="Search catalog pieces, fabrics, marble..."
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600"
+                    className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
                   />
 
                   <div className="flex gap-1.5 overflow-x-auto pb-1">
@@ -1596,8 +1614,8 @@ export default function CustomerStudio({
                         onClick={() => setActiveCatalogCategory(cat)}
                         className={`px-3 py-1 rounded-lg text-[10px] font-bold capitalize transition-colors shrink-0 ${
                           activeCatalogCategory === cat
-                            ? 'bg-indigo-600 text-white shadow-sm'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                            ? 'bg-brand-500 text-white shadow-sm'
+                            : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
                         }`}
                       >
                         {cat === 'all' ? 'All' : `${cat}s`}
@@ -1608,7 +1626,7 @@ export default function CustomerStudio({
 
                 {/* Items Grid */}
                 {filteredCatalog.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                  <div className="p-6 text-center text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                     No matching pieces found. Try switching categories or clearing search.
                   </div>
                 ) : (
@@ -1621,32 +1639,32 @@ export default function CustomerStudio({
                           onClick={() => setSelectedCatalogItem(item)}
                           className={`p-2.5 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer group ${
                             isSel
-                              ? 'bg-indigo-50/80 dark:bg-indigo-950/30 border-indigo-500 shadow-md ring-2 ring-indigo-500/20'
-                              : 'bg-white dark:bg-slate-950/40 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                              ? 'bg-brand-50/80 dark:bg-brand-950/30 border-brand-500 shadow-md ring-2 ring-brand-500/20'
+                              : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
                           }`}
                         >
-                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 mb-2">
+                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 mb-2">
                             <img
                               src={item.imageUrl}
                               alt={item.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             {isSel && (
-                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-md">
                                 <Check size={12} strokeWidth={3} />
                               </div>
                             )}
                             <div
                               className="absolute bottom-1.5 left-1.5 w-3 h-3 rounded-full border border-white shadow-sm"
-                              style={{ backgroundColor: item.color || '#4f46e5' }}
+                              style={{ backgroundColor: item.color || '#c59b63' }}
                             />
                           </div>
 
                           <div>
-                            <div className="text-[11px] font-extrabold text-slate-900 dark:text-white truncate">
+                            <div className="text-[11px] font-extrabold text-stone-900 dark:text-white truncate">
                               {item.name}
                             </div>
-                            <div className="text-[10px] text-slate-400 truncate">
+                            <div className="text-[10px] text-stone-400 truncate">
                               {item.material || 'Architectural Grade'}
                             </div>
                             <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
@@ -1669,11 +1687,11 @@ export default function CustomerStudio({
                   value={customPromptText}
                   onChange={(e) => setCustomPromptText(e.target.value)}
                   placeholder="Describe your desired furniture, fabric upholstery, marble vein texture, or wood grain..."
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600 resize-none shadow-sm leading-relaxed"
+                  className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 resize-none shadow-sm leading-relaxed"
                 />
 
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
                     Curated Luxury Prompts:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
@@ -1687,7 +1705,7 @@ export default function CustomerStudio({
                       <button
                         key={idx}
                         onClick={() => setCustomPromptText(chip)}
-                        className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-[10px] text-slate-700 dark:text-slate-300 font-semibold transition-colors"
+                        className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-semibold transition-colors"
                       >
                         ✨ {chip}
                       </button>
@@ -1700,7 +1718,7 @@ export default function CustomerStudio({
             {/* TAB CONTENT C: UPLOAD PHOTO REFERENCE */}
             {activeOption === 'C' && (
               <div className="space-y-3">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-stone-500 dark:text-stone-400">
                   Upload or snap any real furniture piece or surface tile to clone onto the spot:
                 </p>
 
@@ -1711,13 +1729,13 @@ export default function CustomerStudio({
                         <img
                           src={uploadedReferenceBase64}
                           alt="Ref"
-                          className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm shrink-0"
+                          className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm shrink-0"
                         />
                         <div className="overflow-hidden">
                           <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block">
                             REFERENCE ATTACHED
                           </span>
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate block">
+                          <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate block">
                             {uploadedReferenceName}
                           </span>
                         </div>
@@ -1737,7 +1755,7 @@ export default function CustomerStudio({
                     </div>
 
                     {/* Cushion Silhouette Specification */}
-                    <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 space-y-2">
                       <div
                         onClick={() => {
                           const nextVal = !enableCushionSpec;
@@ -1759,15 +1777,15 @@ export default function CustomerStudio({
                                 analyzeReferenceImage(uploadedReferenceBase64);
                               }
                             }}
-                            className="rounded accent-indigo-600 cursor-pointer"
+                            className="rounded accent-brand-500 cursor-pointer"
                           />
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                            <Sparkles size={13} className={enableCushionSpec ? "text-amber-500" : "text-slate-400"} />
+                          <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                            <Sparkles size={13} className={enableCushionSpec ? "text-brand-500" : "text-stone-400"} />
                             Cushion & Silhouette Locking
                           </span>
                         </div>
                         <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                          enableCushionSpec ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                          enableCushionSpec ? 'bg-brand-500 text-white' : 'bg-stone-200 dark:bg-stone-800 text-stone-500'
                         }`}>
                           {enableCushionSpec ? 'ACTIVE' : 'OPTIONAL'}
                         </span>
@@ -1776,16 +1794,16 @@ export default function CustomerStudio({
                       {enableCushionSpec && (
                         <div className="pt-2 space-y-2">
                           <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-slate-500">Geometry and cushion specifications:</span>
+                            <span className="text-stone-500">Geometry and cushion specifications:</span>
                             {isAnalyzingRef ? (
-                              <span className="text-indigo-600 font-bold animate-pulse flex items-center gap-1">
+                              <span className="text-brand-600 font-bold animate-pulse flex items-center gap-1">
                                 <RefreshCw size={10} className="animate-spin" /> Analyzing...
                               </span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => analyzeReferenceImage(uploadedReferenceBase64)}
-                                className="text-indigo-600 font-bold hover:underline"
+                                className="text-brand-600 font-bold hover:underline"
                               >
                                 Re-scan
                               </button>
@@ -1796,19 +1814,19 @@ export default function CustomerStudio({
                             value={referenceDescription}
                             onChange={(e) => setReferenceDescription(e.target.value)}
                             placeholder="Specify exact cushions, contours, fabric texture..."
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600"
+                            className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
                           />
                         </div>
                       )}
                     </div>
                   </div>
                 ) : (
-                  <label className="w-full py-6 px-4 rounded-2xl border-2 border-dashed border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-500/5 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex flex-col items-center justify-center gap-2 cursor-pointer transition-all shadow-sm">
-                    <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 shadow-sm flex items-center justify-center text-indigo-600">
+                  <label className="w-full py-6 px-4 rounded-2xl border-2 border-dashed border-brand-200 dark:border-brand-500/30 bg-brand-50/40 dark:bg-brand-500/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-brand-700 dark:text-brand-300 font-bold text-xs flex flex-col items-center justify-center gap-2 cursor-pointer transition-all shadow-sm">
+                    <div className="w-10 h-10 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-brand-600">
                       <Upload size={18} />
                     </div>
                     <span>Select Reference Furniture Photo</span>
-                    <span className="text-[10px] text-slate-400 font-normal">PNG, JPG or WebP up to 10MB</span>
+                    <span className="text-[10px] text-stone-400 font-normal">PNG, JPG or WebP up to 10MB</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -1838,11 +1856,11 @@ export default function CustomerStudio({
           {/* =========================================================================
               STICKY PRIMARY ACTION BAR ("Stage Room" Button)
               ========================================================================= */}
-          <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 sticky bottom-0 z-30 shadow-xl space-y-2">
+          <div className="p-4 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 sticky bottom-0 z-30 shadow-xl space-y-2">
             {!currentUser ? (
               <button
                 onClick={() => onRequireAuth && onRequireAuth()}
-                className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-sm shadow-xl shadow-amber-500/25 flex items-center justify-center gap-2 transition-all"
+                className="w-full py-4 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-sm shadow-xl shadow-brand-500/25 flex items-center justify-center gap-2 transition-all"
               >
                 <LogIn size={18} />
                 <span>Sign In to Stage Rooms (Get 100 Free Credits)</span>
@@ -1851,7 +1869,7 @@ export default function CustomerStudio({
               <div className="space-y-1">
                 <button
                   disabled
-                  className="w-full py-4 rounded-2xl bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-extrabold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+                  className="w-full py-4 rounded-2xl bg-stone-300 dark:bg-stone-800 text-stone-500 dark:text-stone-400 font-extrabold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
                 >
                   <Lock size={16} />
                   <span>Insufficient AI Credits (0 Available)</span>
@@ -1864,7 +1882,7 @@ export default function CustomerStudio({
               <button
                 onClick={executeAIStaging}
                 disabled={isAILoading || !currentRoomUrl}
-                className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-xl shadow-indigo-600/30 flex items-center justify-center gap-2 transition-all transform active:scale-98 disabled:opacity-40"
+                className="w-full py-4 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-extrabold text-sm shadow-xl shadow-brand-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-98 disabled:opacity-40"
               >
                 <Sparkles size={18} />
                 <span>
@@ -1881,23 +1899,23 @@ export default function CustomerStudio({
           RECENT CREATIONS DRAWER / MODAL
           ========================================================================= */}
       {isRecentCreationsOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex justify-end transition-opacity">
-          <div className="w-full max-w-lg bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-sm flex justify-end transition-opacity">
+          <div className="w-full max-w-lg bg-white dark:bg-stone-900 h-full shadow-2xl flex flex-col border-l border-stone-200 dark:border-stone-800 overflow-hidden">
             
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-950/50">
+            <div className="px-5 py-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50 dark:bg-stone-950/50">
               <div className="flex items-center gap-2">
-                <FolderHeart size={18} className="text-indigo-600 dark:text-indigo-400" />
-                <h3 className="font-extrabold text-base text-slate-900 dark:text-white">
+                <FolderHeart size={18} className="text-brand-600 dark:text-brand-400" />
+                <h3 className="font-extrabold text-base text-stone-900 dark:text-white font-serif">
                   My Recent Room Creations
                 </h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 font-bold">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400 font-bold">
                   {recentCreations.length}
                 </span>
               </div>
               <button
                 onClick={() => setIsRecentCreationsOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500"
+                className="w-8 h-8 rounded-full hover:bg-stone-200 dark:hover:bg-stone-800 flex items-center justify-center text-stone-500"
               >
                 <X size={18} />
               </button>
@@ -1907,13 +1925,13 @@ export default function CustomerStudio({
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {recentCreations.length === 0 ? (
                 <div className="py-20 text-center space-y-3">
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto">
+                  <div className="w-14 h-14 rounded-2xl bg-brand-50 dark:bg-brand-600/20 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto">
                     <Sparkles size={24} />
                   </div>
-                  <h4 className="font-extrabold text-sm text-slate-800 dark:text-white">
+                  <h4 className="font-extrabold text-sm text-stone-800 dark:text-white font-serif">
                     No creations yet
                   </h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 max-w-xs mx-auto">
                     Stage a piece of furniture into your room to generate and save your first architectural design!
                   </p>
                 </div>
@@ -1922,10 +1940,10 @@ export default function CustomerStudio({
                   <div
                     key={creation.id}
                     onClick={() => handleResumeCreation(creation)}
-                    className="p-3.5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600/50 transition-all cursor-pointer shadow-sm hover:shadow-md group flex gap-3.5 items-center justify-between"
+                    className="p-3.5 rounded-2xl bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 hover:border-brand-400 dark:hover:border-brand-500/50 transition-all cursor-pointer shadow-sm hover:shadow-md group flex gap-3.5 items-center justify-between"
                   >
                     <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-20 h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0 border border-slate-200 dark:border-slate-800">
+                      <div className="w-20 h-16 rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 shrink-0 border border-stone-200 dark:border-stone-800">
                         {creation.thumbnail ? (
                           <img
                             src={creation.thumbnail}
@@ -1933,17 +1951,17 @@ export default function CustomerStudio({
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-slate-400">
+                          <div className="w-full h-full flex items-center justify-center text-stone-400">
                             <ImageIcon size={20} />
                           </div>
                         )}
                       </div>
 
                       <div className="overflow-hidden">
-                        <h4 className="text-xs font-extrabold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 transition-colors">
+                        <h4 className="text-xs font-extrabold text-stone-900 dark:text-white truncate group-hover:text-brand-600 transition-colors">
                           {creation.title}
                         </h4>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
+                        <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 flex items-center gap-2">
                           <span className="flex items-center gap-1">
                             <Clock size={10} />
                             {new Date(creation.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -1955,7 +1973,7 @@ export default function CustomerStudio({
                           )}
                         </div>
                         {creation.versionHistory?.length > 1 && (
-                          <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400">
+                          <span className="inline-block mt-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-brand-50 dark:bg-brand-500/20 text-brand-600 dark:text-brand-400">
                             {creation.versionHistory.length} versions
                           </span>
                         )}

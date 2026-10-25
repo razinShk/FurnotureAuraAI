@@ -69,26 +69,26 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
-      {/* Top Banner (White Theme Default) */}
-      <section className="pt-10 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full border-b border-slate-200 dark:border-slate-900">
+    <div className="min-h-screen bg-[#faf8f5] dark:bg-[#121110] text-stone-900 dark:text-stone-100 flex flex-col transition-colors duration-200">
+      {/* Top Banner (Warm Luxury Editorial) */}
+      <section className="pt-10 pb-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full border-b border-stone-200 dark:border-stone-800">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-bold mb-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-50 dark:bg-brand-900/30 border border-brand-200/70 dark:border-brand-500/30 text-brand-800 dark:text-brand-300 text-xs font-bold mb-3">
               <Store size={14} />
               <span>Partner Showroom Inventories</span>
             </div>
-            <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-3xl sm:text-5xl font-serif font-bold text-stone-900 dark:text-stone-100 tracking-tight">
               Furniture Store Catalog
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-2 max-w-xl">
+            <p className="text-sm text-stone-600 dark:text-stone-400 mt-2 max-w-xl">
               Browse authentic physical furniture collections. Pick any item to stage directly into your living room with photorealistic spatial lighting.
             </p>
           </div>
 
           <button
             onClick={() => onNavigate('studio')}
-            className="px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all self-start md:self-end"
+            className="px-6 py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-brand-500/25 transition-all self-start md:self-end"
           >
             <Sparkles size={16} />
             <span>Launch AI Studio</span>
@@ -99,13 +99,13 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
         <div className="mt-8 flex flex-col sm:flex-row gap-3 items-center justify-between">
           {/* Search Box */}
           <div className="relative w-full sm:w-80">
-            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
               placeholder="Search by name, fabric, marble, wood..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-600 shadow-sm"
+              className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 shadow-sm"
             />
           </div>
 
@@ -114,7 +114,7 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
             <select
               value={selectedStore}
               onChange={(e) => setSelectedStore(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-600 shrink-0 shadow-sm"
+              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-300 focus:outline-none focus:border-brand-500 shrink-0 shadow-sm"
             >
               <option value="all">All Retail Stores</option>
               {stores.map((s) => (
@@ -128,7 +128,7 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
-              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 focus:outline-none focus:border-indigo-600 shrink-0 shadow-sm"
+              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-300 focus:outline-none focus:border-brand-500 shrink-0 shadow-sm"
             >
               <option value="popular">Curated Picks</option>
               <option value="price-asc">Price: Low to High</option>
@@ -145,8 +145,8 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
               onClick={() => setSelectedCategory(cat.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
                 selectedCategory === cat.id
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
-                  : 'bg-white hover:bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-800 shadow-sm'
+                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/20'
+                  : 'bg-white hover:bg-stone-100 dark:bg-stone-900 text-stone-700 dark:text-stone-400 border border-stone-200 dark:border-stone-800 shadow-sm'
               }`}
             >
               {cat.label}
@@ -213,10 +213,10 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
                   />
                   <div
                     className="absolute top-3 left-3 w-4 h-4 rounded-full border-2 border-white shadow-md"
-                    style={{ backgroundColor: item.color || '#4f46e5' }}
+                    style={{ backgroundColor: item.color || '#c59b63' }}
                     title="Material swatch"
                   />
-                  <div className="absolute bottom-3 right-3 bg-white/90 dark:bg-slate-950/80 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="absolute bottom-3 right-3 bg-white/95 dark:bg-stone-950/90 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs font-bold text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-800 shadow-sm">
                     {item.category?.toUpperCase()}
                   </div>
                 </div>
@@ -224,19 +224,19 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
                 {/* Details */}
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div>
-                    <h3 className="font-extrabold text-sm text-slate-900 dark:text-white leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                    <h3 className="font-serif font-bold text-base text-stone-900 dark:text-stone-100 leading-snug group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
                       {item.name}
                     </h3>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5 space-y-0.5">
-                      <div>Dimensions: <span className="text-slate-700 dark:text-slate-300 font-medium">{item.dimensions || 'Custom'}</span></div>
-                      <div>Material: <span className="text-slate-700 dark:text-slate-300 font-medium">{item.material || 'Architectural Grade'}</span></div>
+                    <div className="text-xs text-stone-500 dark:text-stone-400 mt-2 space-y-1">
+                      <div>Dimensions: <span className="text-stone-700 dark:text-stone-300 font-medium">{item.dimensions || 'Custom'}</span></div>
+                      <div>Material: <span className="text-stone-700 dark:text-stone-300 font-medium">{item.material || 'Architectural Grade'}</span></div>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between">
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-slate-400 font-semibold uppercase">Showroom Price</div>
-                      <div className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                      <div className="text-xs text-stone-400 font-semibold uppercase tracking-wider">Showroom Price</div>
+                      <div className="text-base font-serif font-bold text-emerald-600 dark:text-emerald-400">
                         ${Number(item.price || 0).toLocaleString()}
                       </div>
                     </div>
@@ -246,7 +246,7 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
                         if (onSelectCatalogItem) onSelectCatalogItem(item);
                         onNavigate('studio');
                       }}
-                      className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all transform active:scale-95"
+                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-brand-500/20 transition-all transform active:scale-95"
                     >
                       <Sparkles size={13} />
                       <span>Stage In Room</span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Home,
   Wand2,
@@ -13,11 +13,8 @@ import {
   LogIn,
   LogOut,
   ChevronRight,
-  ChevronDown,
   Lock,
-  Crown,
-  Key,
-  Check
+  Crown
 } from 'lucide-react';
 import { useUser, useClerk, UserButton } from '@clerk/clerk-react';
 
@@ -32,22 +29,22 @@ import SuperAdminPage from './pages/SuperAdminPage';
 import AuthPage from './pages/AuthPage';
 import AuthModal from './components/AuthModal';
 import SettingsModal from './components/SettingsModal';
-import { Sheet, btnPrimary, btnSecondary } from './components/ui';
+import { Sheet, btnPrimary } from './components/ui';
 
-const NAV_ITEMS = [
+const ALL_NAV_ITEMS = [
   { id: 'landing', label: 'Home', icon: Home },
-  { id: 'studio', label: 'AI Studio', icon: Wand2, tag: 'Customer' },
+  { id: 'studio', label: 'AI Studio', icon: Wand2 },
   { id: 'catalog', label: 'Catalog', icon: LayoutGrid },
-  { id: 'biller', label: 'My Store', icon: Store, tag: 'B2B' },
-  { id: 'admin', label: 'Super Admin', icon: Shield, tag: 'Admin' },
-  { id: 'auth', label: 'Sign In & Roles', icon: User }
+  { id: 'biller', label: 'Showroom Store', icon: Store, tag: 'B2B', requiredRole: 'biller' },
+  { id: 'admin', label: 'Super Admin', icon: Shield, tag: 'Admin', requiredRole: 'admin' },
+  { id: 'auth', label: 'Sign In', icon: User, guestOnly: true }
 ];
 
 const ROLE_LABEL = { 
   admin: 'Super Admin', 
-  biller: 'Store Owner', 
-  customer: 'Customer', 
-  guest: 'Guest' 
+  biller: 'Showroom Owner', 
+  customer: 'Studio Client', 
+  guest: 'Visitor' 
 };
 
 export default function App() {
@@ -68,21 +65,8 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [selectedCatalogItemForStudio, setSelectedCatalogItemForStudio] = useState(null);
   const [profile, setProfile] = useState(null);
-
-  const roleDropdownRef = useRef(null);
-
-  // Active Role Persona Override
-  const [demoPersona, setDemoPersona] = useState(() => {
-    try {
-      const saved = localStorage.getItem('aura_demo_persona');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
 
   // Extract all emails associated with Clerk user
   const clerkEmail = (
@@ -97,19 +81,15 @@ export default function App() {
     ...(user?.externalAccounts?.map((a) => a.emailAddress?.toLowerCase()) || [])
   ].filter(Boolean);
 
-  // Super Admin designation: razinshaikh3133@gmail.com has global authority
-  const isClerkSuperAdmin = allClerkEmails.includes('razinshaikh3133@gmail.com');
-  const isPersonaSuperAdmin = demoPersona?.email?.toLowerCase() === 'razinshaikh3133@gmail.com' || demoPersona?.role === 'admin';
-  const isSuperAdminEmail = isClerkSuperAdmin || isPersonaSuperAdmin;
+  // Verified Super Admin designation
+  const isSuperAdminEmail = allClerkEmails.includes('razinshaikh3133@gmail.com');
 
   // Determine active effective role
   const role = isSuperAdminEmail
     ? 'admin'
-    : demoPersona
-    ? demoPersona.role
     : isSignedIn
     ? (user?.publicMetadata?.role || profile?.role || 'customer')
-    : 'customer';
+    : 'guest';
 
   // Sync with Supabase on user load
   useEffect(() => {
@@ -118,13 +98,13 @@ export default function App() {
       return;
     }
     let cancelled = false;
-    syncClerkUserWithSupabase(user, role).then((p) => {
-      if (!cancelled) setProfile(p);
+    syncClerkUserWithSupabase(user).then((p) => {
+      if (!cancelled && p) setProfile(p);
     });
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn, user?.id, role]);
+  }, [isSignedIn, user?.id]);
 
   // Sync URL hash with currentPage
   useEffect(() => {
@@ -139,57 +119,43 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Close role dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target)) {
-        setIsRoleDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Current active user object
+  // Current active user object (null if logged out)
   const currentUser = useMemo(() => {
+    if (!isSignedIn || !user) {
+      return null;
+    }
     if (isSuperAdminEmail) {
       return {
-        id: user?.id || 'user-admin-razin',
-        name: user?.fullName || user?.firstName || 'Razin Shaikh (Super Admin)',
-        email: 'razinshaikh3133@gmail.com',
+        id: user.id,
+        name: user.fullName || user.firstName || 'Razin Shaikh (Super Admin)',
+        email: clerkEmail || 'razinshaikh3133@gmail.com',
         role: 'admin',
-        imageUrl: user?.imageUrl,
-        credits: Math.max(profile?.credits || 0, 5000),
+        imageUrl: user.imageUrl,
+        credits: Math.max(profile?.credits ?? 5000, 5000),
         plan: 'Super Admin Unlimited'
       };
     }
-    if (demoPersona) {
-      return demoPersona;
-    }
-    if (isSignedIn && user) {
-      return {
-        id: user.id,
-        name: user.fullName || user.firstName || clerkEmail.split('@')[0],
-        email: clerkEmail,
-        role,
-        imageUrl: user.imageUrl,
-        credits: profile?.credits ?? 100,
-        plan: profile?.plan || ROLE_LABEL[role]
-      };
-    }
-    // Default active session for instant Customer Studio access
     return {
-      id: 'user-customer-studio',
-      name: 'Interior Studio Client',
-      email: 'client@aura.ai',
-      role: 'customer',
-      credits: 100,
-      plan: 'Free Explorer'
+      id: user.id,
+      name: user.fullName || user.firstName || clerkEmail.split('@')[0],
+      email: clerkEmail,
+      role,
+      imageUrl: user.imageUrl,
+      credits: profile?.credits ?? 100,
+      plan: profile?.plan || ROLE_LABEL[role]
     };
-  }, [isSignedIn, user, clerkEmail, role, profile, isSuperAdminEmail, demoPersona]);
+  }, [isSignedIn, user, clerkEmail, role, profile, isSuperAdminEmail]);
 
-  // All navigation items are displayed
-  const navItems = NAV_ITEMS;
+  // Role-filtered navigation items
+  const navItems = useMemo(() => {
+    return ALL_NAV_ITEMS.filter((item) => {
+      if (item.requiredRole === 'admin') return role === 'admin';
+      if (item.requiredRole === 'biller') return role === 'biller' || role === 'admin';
+      if (item.guestOnly) return !isSignedIn;
+      return true;
+    });
+  }, [role, isSignedIn]);
+
   const mobileTabs = navItems.slice(0, 4);
 
   const navigateTo = (page) => {
@@ -198,27 +164,11 @@ export default function App() {
       window.location.hash = page;
     }
     setIsAccountOpen(false);
-    setIsRoleDropdownOpen(false);
     window.scrollTo({ top: 0 });
-  };
-
-  const handleSelectRolePersona = (persona) => {
-    setDemoPersona(persona);
-    if (persona) {
-      localStorage.setItem('aura_demo_persona', JSON.stringify(persona));
-    } else {
-      localStorage.removeItem('aura_demo_persona');
-    }
-    setIsRoleDropdownOpen(false);
   };
 
   const handleDeductCredits = (amount = 2) => {
     setProfile((prev) => (prev ? { ...prev, credits: Math.max(0, (prev.credits || 0) - amount) } : prev));
-    if (demoPersona) {
-      const updated = { ...demoPersona, credits: Math.max(0, (demoPersona.credits || 0) - amount) };
-      setDemoPersona(updated);
-      localStorage.setItem('aura_demo_persona', JSON.stringify(updated));
-    }
   };
 
   const openStudioWith = (item) => {
@@ -237,7 +187,7 @@ export default function App() {
     ? currentUser.credits === null
       ? '—'
       : currentUser.credits.toLocaleString()
-    : '100';
+    : '0';
 
   return (
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 lg:flex">
@@ -253,127 +203,37 @@ export default function App() {
           className={`flex items-center gap-3 h-16 ${isStudio ? 'justify-center' : 'px-5'}`}
           aria-label="FurnitureAura home"
         >
-          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-amber-500 text-white font-extrabold text-sm flex items-center justify-center shrink-0 shadow-sm">
+          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-sm flex items-center justify-center shrink-0 shadow-sm">
             FA
           </span>
           {!isStudio && (
-            <span className="font-extrabold tracking-tight text-[15px]">
-              FurnitureAura<span className="text-amber-500">AI</span>
+            <span className="font-serif font-bold tracking-tight text-[17px] text-stone-900 dark:text-stone-100">
+              FurnitureAura<span className="text-brand-500 font-sans ml-0.5 text-xs font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-50 dark:bg-brand-950/50 border border-brand-200/60 dark:border-brand-500/30">AI</span>
             </span>
           )}
         </button>
 
-        {/* Desktop Quick Role Selector Badge */}
-        {!isStudio && (
-          <div className="px-3 pb-2" ref={roleDropdownRef}>
-            <div className="relative">
-              <button
-                onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all ${
-                  role === 'admin'
-                    ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-500/30'
-                    : role === 'biller'
-                    ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-500/30'
-                    : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${
-                    role === 'admin' ? 'bg-indigo-600' : role === 'biller' ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`} />
-                  <div className="truncate">
-                    <div className="text-[10px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400">
-                      Active Role
-                    </div>
-                    <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                      {ROLE_LABEL[role]}
-                    </div>
-                  </div>
+        {/* Verified Role Badge (No fake switcher) */}
+        {!isStudio && isSignedIn && (
+          <div className="px-3 pb-2">
+            <div className={`p-2.5 rounded-xl border text-left flex items-center gap-2.5 ${
+              role === 'admin'
+                ? 'bg-brand-50/70 dark:bg-brand-950/30 border-brand-200/80 dark:border-brand-500/30'
+                : role === 'biller'
+                ? 'bg-amber-50/70 dark:bg-amber-950/30 border-amber-200 dark:border-amber-500/30'
+                : 'bg-stone-50 dark:bg-stone-800/60 border-stone-200 dark:border-stone-700'
+            }`}>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${
+                role === 'admin' ? 'bg-brand-500' : role === 'biller' ? 'bg-amber-500' : 'bg-emerald-500'
+              }`} />
+              <div className="truncate">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-stone-500 dark:text-stone-400">
+                  Account Status
                 </div>
-                <ChevronDown size={14} className="text-slate-400 shrink-0" />
-              </button>
-
-              {/* Role Dropdown Menu */}
-              {isRoleDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 space-y-1">
-                  <button
-                    onClick={() => {
-                      handleSelectRolePersona({
-                        id: 'user-admin-razin',
-                        name: 'Razin Shaikh (Super Admin)',
-                        email: 'razinshaikh3133@gmail.com',
-                        role: 'admin',
-                        credits: 5000,
-                        plan: 'Super Admin Unlimited'
-                      });
-                      navigateTo('admin');
-                    }}
-                    className="w-full p-2 rounded-xl text-left hover:bg-indigo-50 dark:hover:bg-indigo-950/40 flex items-center gap-2.5 text-xs font-bold text-slate-800 dark:text-slate-200"
-                  >
-                    <Crown size={15} className="text-amber-500 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">Super Admin</div>
-                      <div className="text-[10px] text-slate-400 font-normal">razinshaikh3133@gmail.com</div>
-                    </div>
-                    {role === 'admin' && <Check size={14} className="text-indigo-600" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleSelectRolePersona({
-                        id: 'user-biller-1',
-                        name: 'Showroom Retailer (Biller)',
-                        email: 'biller@furnitureaura.ai',
-                        role: 'biller',
-                        credits: 850,
-                        plan: 'Retailer Enterprise',
-                        storeId: 'store-1'
-                      });
-                      navigateTo('biller');
-                    }}
-                    className="w-full p-2 rounded-xl text-left hover:bg-amber-50 dark:hover:bg-amber-950/40 flex items-center gap-2.5 text-xs font-bold text-slate-800 dark:text-slate-200"
-                  >
-                    <Store size={15} className="text-amber-600 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">Store Owner</div>
-                      <div className="text-[10px] text-slate-400 font-normal">biller@furnitureaura.ai</div>
-                    </div>
-                    {role === 'biller' && <Check size={14} className="text-amber-600" />}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleSelectRolePersona({
-                        id: 'user-customer-studio',
-                        name: 'Interior Studio Client',
-                        email: 'client@aura.ai',
-                        role: 'customer',
-                        credits: 100,
-                        plan: 'Free Explorer'
-                      });
-                      navigateTo('studio');
-                    }}
-                    className="w-full p-2 rounded-xl text-left hover:bg-emerald-50 dark:hover:bg-emerald-950/40 flex items-center gap-2.5 text-xs font-bold text-slate-800 dark:text-slate-200"
-                  >
-                    <User size={15} className="text-emerald-600 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate">Customer Studio</div>
-                      <div className="text-[10px] text-slate-400 font-normal">100 Free Credits</div>
-                    </div>
-                    {role === 'customer' && <Check size={14} className="text-emerald-600" />}
-                  </button>
-
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-1 mt-1">
-                    <button
-                      onClick={() => navigateTo('signin')}
-                      className="w-full p-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2.5 text-xs font-bold text-indigo-600 dark:text-indigo-400"
-                    >
-                      <LogIn size={15} />
-                      <span>Clerk Sign In & Roles Page</span>
-                    </button>
-                  </div>
+                <div className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate">
+                  {ROLE_LABEL[role]}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -388,25 +248,23 @@ export default function App() {
                 onClick={() => navigateTo(item.id)}
                 title={item.label}
                 aria-current={active ? 'page' : undefined}
-                className={`w-full flex items-center justify-between min-h-[44px] rounded-xl text-sm font-semibold transition-colors ${
+                className={`w-full flex items-center justify-between min-h-[44px] rounded-xl text-sm font-semibold transition-all ${
                   isStudio ? 'justify-center px-0' : 'px-3'
                 } ${
                   active
-                    ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                    ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300 font-bold shadow-sm'
+                    : 'text-stone-600 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800/60'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Icon size={19} />
+                  <Icon size={19} className={active ? 'text-brand-500' : ''} />
                   {!isStudio && <span>{item.label}</span>}
                 </div>
                 {!isStudio && item.tag && (
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                     item.tag === 'Admin'
-                      ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300'
-                      : item.tag === 'B2B'
-                      ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
-                      : 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300'
+                      ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-800 dark:text-brand-300'
+                      : 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300'
                   }`}>
                     {item.tag}
                   </span>
@@ -431,7 +289,7 @@ export default function App() {
             <IconButton label={isDark ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </IconButton>
-            <IconButton label="AI settings" onClick={() => setIsSettingsOpen(true)}>
+            <IconButton label="Settings" onClick={() => setIsSettingsOpen(true)}>
               <Settings size={18} />
             </IconButton>
           </div>
@@ -442,7 +300,7 @@ export default function App() {
                 <UserButton afterSignOutUrl="/" />
                 {!isStudio && (
                   <div className="min-w-0">
-                    <div className="text-sm font-bold truncate">{currentUser.name}</div>
+                    <div className="text-sm font-bold truncate">{currentUser?.name}</div>
                     <div className="text-[11px] text-slate-500">{ROLE_LABEL[role]}</div>
                   </div>
                 )}
@@ -451,10 +309,10 @@ export default function App() {
               <button 
                 onClick={() => navigateTo('signin')} 
                 className={`${btnPrimary} w-full ${isStudio ? 'px-0' : ''}`} 
-                title="Sign in or select role"
+                title="Sign in"
               >
                 <LogIn size={16} />
-                {!isStudio && 'Sign In / Roles'}
+                {!isStudio && 'Sign In'}
               </button>
             )
           )}
@@ -465,31 +323,41 @@ export default function App() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Mobile top bar */}
         {!isStudio && (
-          <header className="lg:hidden sticky top-0 z-40 safe-top bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800">
+          <header className="lg:hidden sticky top-0 z-40 safe-top bg-white/95 dark:bg-stone-950/95 backdrop-blur-xl border-b border-stone-200/80 dark:border-stone-800">
             <div className="h-14 px-4 flex items-center justify-between">
               <button onClick={() => navigateTo('landing')} className="flex items-center gap-2.5" aria-label="Home">
-                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-amber-500 text-white font-extrabold text-xs flex items-center justify-center">
+                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm">
                   FA
                 </span>
-                <span className="font-extrabold tracking-tight">
-                  FurnitureAura<span className="text-amber-500">AI</span>
+                <span className="font-serif font-bold tracking-tight text-base text-stone-900 dark:text-stone-100">
+                  FurnitureAura<span className="text-brand-500 font-sans ml-1 text-[11px] font-bold uppercase tracking-wider">AI</span>
                 </span>
               </button>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsAccountOpen(true)}
-                  className={`flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-xs font-bold ${
-                    role === 'admin'
-                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                      : role === 'biller'
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                  <span>{ROLE_LABEL[role]}</span>
-                </button>
+                {isSignedIn ? (
+                  <button
+                    onClick={() => setIsAccountOpen(true)}
+                    className={`flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-xs font-bold ${
+                      role === 'admin'
+                        ? 'bg-brand-50 text-brand-800 border-brand-200 dark:bg-brand-950/40 dark:text-brand-300 dark:border-brand-500/30'
+                        : role === 'biller'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-500/30'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-500/30'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    <span>{ROLE_LABEL[role]}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigateTo('signin')}
+                    className="h-8 px-3 rounded-full bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold flex items-center gap-1 shadow-sm shadow-brand-500/20"
+                  >
+                    <LogIn size={13} />
+                    <span>Sign In</span>
+                  </button>
+                )}
 
                 <IconButton label={isDark ? 'Light mode' : 'Dark mode'} onClick={toggleTheme}>
                   {isDark ? <Sun size={18} /> : <Moon size={18} />}
@@ -508,7 +376,7 @@ export default function App() {
               onDeductCredits={handleDeductCredits}
               initialCatalogItem={selectedCatalogItemForStudio}
               onNavigate={navigateTo}
-              onRequireAuth={() => navigateTo('signin')}
+              onRequireAuth={() => setIsAuthOpen(true)}
             />
           )}
 
@@ -519,18 +387,6 @@ export default function App() {
               <BillerAdminPage currentUser={currentUser} onNavigate={navigateTo} />
             ) : (
               <BillerAccessGate
-                onEnterPersona={() => {
-                  handleSelectRolePersona({
-                    id: 'user-biller-1',
-                    name: 'Showroom Retailer (Biller)',
-                    email: 'biller@furnitureaura.ai',
-                    role: 'biller',
-                    credits: 850,
-                    plan: 'Retailer Enterprise',
-                    storeId: 'store-1'
-                  });
-                  navigateTo('biller');
-                }}
                 onSignIn={() => navigateTo('signin')}
                 onBack={() => navigateTo('landing')}
               />
@@ -541,17 +397,6 @@ export default function App() {
               <SuperAdminPage onNavigate={navigateTo} />
             ) : (
               <SuperAdminAccessGate
-                onEnterSuperAdmin={() => {
-                  handleSelectRolePersona({
-                    id: 'user-admin-razin',
-                    name: 'Razin Shaikh (Super Admin)',
-                    email: 'razinshaikh3133@gmail.com',
-                    role: 'admin',
-                    credits: 5000,
-                    plan: 'Super Admin Unlimited'
-                  });
-                  navigateTo('admin');
-                }}
                 onSignIn={() => navigateTo('signin')}
                 onBack={() => navigateTo('landing')}
               />
@@ -562,7 +407,6 @@ export default function App() {
               currentUser={currentUser}
               activeRole={role}
               initialTab={currentPage === 'signup' ? 'signup' : currentPage === 'roles' ? 'roles' : 'signin'}
-              onSelectRolePersona={handleSelectRolePersona}
               onNavigate={navigateTo}
             />
           )}
@@ -575,7 +419,7 @@ export default function App() {
           aria-label="Main"
           className="lg:hidden fixed bottom-0 inset-x-0 z-40 safe-bottom bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border-t border-slate-200 dark:border-slate-800"
         >
-          <div className="grid grid-cols-5 h-16">
+          <div className="grid grid-cols-4 h-16">
             {mobileTabs.map((item) => {
               const Icon = item.icon;
               const active = currentPage === item.id;
@@ -585,15 +429,12 @@ export default function App() {
                 </TabButton>
               );
             })}
-            <TabButton active={isAccountOpen} label="Roles / Acc" onClick={() => setIsAccountOpen(true)}>
-              <User size={22} />
-            </TabButton>
           </div>
         </nav>
       )}
 
       {/* ---------- Mobile account sheet ---------- */}
-      <Sheet open={isAccountOpen} onClose={() => setIsAccountOpen(false)} title={currentUser ? currentUser.name : 'Welcome'} subtitle={currentUser ? `${currentUser.email} · ${ROLE_LABEL[role]}` : 'Select a role or sign in'}>
+      <Sheet open={isAccountOpen} onClose={() => setIsAccountOpen(false)} title={currentUser ? currentUser.name : 'Welcome'} subtitle={currentUser ? `${currentUser.email} · ${ROLE_LABEL[role]}` : 'Sign in to your account'}>
         <div className="space-y-4">
           {currentUser && (
             <div className="flex items-center justify-between p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200/70 dark:border-amber-500/20">
@@ -605,80 +446,19 @@ export default function App() {
             </div>
           )}
 
-          {/* Quick Persona Switcher in Sheet */}
-          <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
-            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider px-1">Instant Role Switcher</div>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => {
-                  handleSelectRolePersona({
-                    id: 'user-admin-razin',
-                    name: 'Razin Shaikh (Super Admin)',
-                    email: 'razinshaikh3133@gmail.com',
-                    role: 'admin',
-                    credits: 5000,
-                    plan: 'Super Admin Unlimited'
-                  });
-                  navigateTo('admin');
-                }}
-                className={`p-2.5 rounded-xl border text-center text-xs font-extrabold flex flex-col items-center gap-1 ${
-                  role === 'admin' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 border-slate-200 text-slate-700 dark:text-slate-200'
-                }`}
-              >
-                <Crown size={16} />
-                <span>Super Admin</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  handleSelectRolePersona({
-                    id: 'user-biller-1',
-                    name: 'Showroom Retailer (Biller)',
-                    email: 'biller@furnitureaura.ai',
-                    role: 'biller',
-                    credits: 850,
-                    plan: 'Retailer Enterprise',
-                    storeId: 'store-1'
-                  });
-                  navigateTo('biller');
-                }}
-                className={`p-2.5 rounded-xl border text-center text-xs font-extrabold flex flex-col items-center gap-1 ${
-                  role === 'biller' ? 'bg-amber-500 text-slate-950 border-amber-500' : 'bg-white dark:bg-slate-800 border-slate-200 text-slate-700 dark:text-slate-200'
-                }`}
-              >
-                <Store size={16} />
-                <span>Store Owner</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  handleSelectRolePersona({
-                    id: 'user-customer-studio',
-                    name: 'Interior Studio Client',
-                    email: 'client@aura.ai',
-                    role: 'customer',
-                    credits: 100,
-                    plan: 'Free Explorer'
-                  });
-                  navigateTo('studio');
-                }}
-                className={`p-2.5 rounded-xl border text-center text-xs font-extrabold flex flex-col items-center gap-1 ${
-                  role === 'customer' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white dark:bg-slate-800 border-slate-200 text-slate-700 dark:text-slate-200'
-                }`}
-              >
-                <User size={16} />
-                <span>Customer</span>
-              </button>
-            </div>
-          </div>
-
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
-            <SheetRow icon={<Shield size={18} />} label="Super Admin Console" onClick={() => navigateTo('admin')} />
-            <SheetRow icon={<Store size={18} />} label="Showroom Store Portal" onClick={() => navigateTo('biller')} />
+            {role === 'admin' && (
+              <SheetRow icon={<Shield size={18} />} label="Super Admin Console" onClick={() => navigateTo('admin')} />
+            )}
+            {(role === 'biller' || role === 'admin') && (
+              <SheetRow icon={<Store size={18} />} label="Showroom Store Portal" onClick={() => navigateTo('biller')} />
+            )}
             <SheetRow icon={<Wand2 size={18} />} label="AI Staging Studio" onClick={() => navigateTo('studio')} />
-            <SheetRow icon={<LogIn size={18} />} label="Sign In & Roles Page" onClick={() => navigateTo('signin')} />
+            {!isSignedIn && (
+              <SheetRow icon={<LogIn size={18} />} label="Sign In" onClick={() => navigateTo('signin')} />
+            )}
             <SheetRow icon={isDark ? <Sun size={18} /> : <Moon size={18} />} label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme} />
-            <SheetRow icon={<Settings size={18} />} label="AI & cloud settings" onClick={() => { setIsAccountOpen(false); setIsSettingsOpen(true); }} />
+            <SheetRow icon={<Settings size={18} />} label="Settings" onClick={() => { setIsAccountOpen(false); setIsSettingsOpen(true); }} />
             {isSignedIn && (
               <SheetRow icon={<LogOut size={18} />} label="Sign out" danger onClick={() => { setIsAccountOpen(false); signOut(); navigateTo('landing'); }} />
             )}
@@ -710,8 +490,8 @@ function TabButton({ active, label, onClick, children }) {
     <button
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
-      className={`flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
-        active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
+      className={`flex flex-col items-center justify-center gap-0.5 text-xs font-semibold transition-colors ${
+        active ? 'text-brand-600 dark:text-brand-400 font-bold' : 'text-stone-500 dark:text-stone-400'
       }`}
     >
       {children}
@@ -724,50 +504,42 @@ function SheetRow({ icon, label, onClick, danger }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full min-h-[52px] px-4 flex items-center gap-3 text-sm font-semibold text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 ${
-        danger ? 'text-rose-600' : 'text-slate-800 dark:text-slate-200'
+      className={`w-full min-h-[52px] px-4 flex items-center gap-3 text-sm font-semibold text-left hover:bg-stone-50 dark:hover:bg-stone-800/60 ${
+        danger ? 'text-rose-600' : 'text-stone-800 dark:text-stone-200'
       }`}
     >
-      <span className="text-slate-500 dark:text-slate-400">{icon}</span>
+      <span className="text-stone-500 dark:text-stone-400">{icon}</span>
       <span className="flex-1">{label}</span>
-      <ChevronRight size={16} className="text-slate-400" />
+      <ChevronRight size={16} className="text-stone-400" />
     </button>
   );
 }
 
-function SuperAdminAccessGate({ onEnterSuperAdmin, onSignIn, onBack }) {
+function SuperAdminAccessGate({ onSignIn, onBack }) {
   return (
-    <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
-      <div className="max-w-md w-full text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xl">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-sm">
+    <div className="flex-1 flex items-center justify-center p-6 bg-[#faf8f5] dark:bg-[#121110]">
+      <div className="max-w-md w-full text-center bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl p-8 shadow-xl">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-500/30 flex items-center justify-center text-brand-600 dark:text-brand-400 shadow-sm">
           <Shield size={32} />
         </div>
         
-        <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-2">
-          <Crown size={13} className="text-amber-500" />
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 dark:bg-brand-900/30 text-brand-800 dark:text-brand-300 text-xs font-bold mb-3 border border-brand-200/50 dark:border-brand-500/30">
+          <Crown size={13} className="text-brand-500" />
           <span>Platform Administrator Console</span>
         </div>
 
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Super Admin Access</h1>
-        <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-          Full platform privileges are designated for <strong className="text-indigo-600 dark:text-indigo-400">razinshaikh3133@gmail.com</strong> with 5,000 AI credits, global database telemetry, and AI model controls.
+        <h1 className="text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">Admin Access Restricted</h1>
+        <p className="text-xs text-stone-600 dark:text-stone-400 mt-2 leading-relaxed">
+          This console is reserved for verified platform administrators with global telemetry and AI model management permissions.
         </p>
 
         <div className="mt-6 flex flex-col gap-2.5">
           <button 
-            onClick={onEnterSuperAdmin} 
-            className="w-full py-3.5 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 transition-all"
-          >
-            <Crown size={15} />
-            <span>Enter as Super Admin (razinshaikh3133@gmail.com)</span>
-          </button>
-
-          <button 
             onClick={onSignIn} 
-            className="w-full py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 px-4 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-brand-500/20"
           >
             <LogIn size={15} />
-            <span>Sign In with Clerk / Google</span>
+            <span>Sign In with Admin Account</span>
           </button>
 
           <button 
@@ -782,7 +554,7 @@ function SuperAdminAccessGate({ onEnterSuperAdmin, onSignIn, onBack }) {
   );
 }
 
-function BillerAccessGate({ onEnterPersona, onSignIn, onBack }) {
+function BillerAccessGate({ onSignIn, onBack }) {
   return (
     <div className="flex-1 flex items-center justify-center p-6 bg-slate-50 dark:bg-slate-950">
       <div className="max-w-md w-full text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-xl">
@@ -794,26 +566,18 @@ function BillerAccessGate({ onEnterPersona, onSignIn, onBack }) {
           <span>B2B Retail Showroom Portal</span>
         </div>
 
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Store Owner Access</h1>
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">Store Owner Access Restricted</h1>
         <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-          Manage physical showroom furniture items, real-time pricing, customer staging analytics, and quotation requests.
+          Manage physical showroom furniture items, real-time pricing, customer staging analytics, and quotation requests. You must have a registered showroom account to access this portal.
         </p>
 
         <div className="mt-6 flex flex-col gap-2.5">
           <button 
-            onClick={onEnterPersona} 
-            className="w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 transition-all"
-          >
-            <Store size={15} />
-            <span>Enter as Showroom Store Owner</span>
-          </button>
-
-          <button 
             onClick={onSignIn} 
-            className="w-full py-3 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-amber-500/20"
           >
             <LogIn size={15} />
-            <span>Sign In / Register Showroom</span>
+            <span>Sign In to Showroom Account</span>
           </button>
 
           <button 

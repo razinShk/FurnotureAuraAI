@@ -107,66 +107,66 @@ export default function RoomQuoteModal({ isOpen, onClose, stagedItems, totalEsti
               </div>
 
               {/* Total Summary */}
-              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-indigo-500/20 flex items-center justify-between shadow-sm">
+              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-stone-950/80 border border-stone-200 dark:border-brand-500/30 flex items-center justify-between shadow-sm">
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-indigo-600 dark:text-indigo-400 font-bold">Estimated Total Investment</div>
-                  <div className="text-2xl font-extrabold text-slate-900 dark:text-white">${totalEstimate?.toLocaleString()}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-brand-600 dark:text-brand-400 font-bold">Estimated Total Investment</div>
+                  <div className="text-2xl font-extrabold text-stone-900 dark:text-white font-serif">${totalEstimate?.toLocaleString()}</div>
                 </div>
-                <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
+                <div className="text-right text-[11px] text-stone-500 dark:text-stone-400">
                   Includes White-Glove Staging & Delivery
                 </div>
               </div>
 
               {/* Consultation / Quote Form */}
               <form onSubmit={handleSubmit} className="space-y-3 pt-2">
-                <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <div className="text-xs font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400">
                   Request White Glove Consultation
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Your Full Name</label>
+                    <label className="block text-[11px] font-semibold text-stone-600 dark:text-stone-400 mb-1">Your Full Name</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. David Vance"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                      className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Email Address</label>
+                    <label className="block text-[11px] font-semibold text-stone-600 dark:text-stone-400 mb-1">Email Address</label>
                     <input
                       type="email"
                       required
                       placeholder="david@example.com"
                       value={customerEmail}
                       onChange={(e) => setCustomerEmail(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                      className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Phone Number (Optional)</label>
+                  <label className="block text-[11px] font-semibold text-stone-600 dark:text-stone-400 mb-1">Phone Number (Optional)</label>
                   <input
                     type="tel"
                     placeholder="+1 (555) 000-0000"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-indigo-600 shadow-sm"
+                    className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm"
                   />
                 </div>
 
                 <div className="pt-2 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <div className="flex items-center gap-1.5 text-[10px] text-stone-500">
                     <ShieldCheck size={14} className="text-emerald-500" />
                     <span>Direct Store Price Guarantee</span>
                   </div>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all"
+                    className="px-6 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-brand-500/25 transition-all"
                   >
                     <span>Send Quote to Store Biller</span>
                     <ArrowRight size={14} />

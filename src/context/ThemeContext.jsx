@@ -12,9 +12,7 @@ export function ThemeProvider({ children }) {
   const [theme, setThemeState] = useState(() => {
     try {
       const saved = localStorage.getItem('aura_theme');
-      if (saved === 'light') return 'light';
-      // If no setting or previously 'dark', set to 'light' as first preference
-      localStorage.setItem('aura_theme', 'light');
+      if (saved === 'dark' || saved === 'light') return saved;
       return 'light';
     } catch {
       return 'light';

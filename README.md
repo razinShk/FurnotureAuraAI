@@ -1,71 +1,168 @@
-# AuraRoom AI — Spatial Interior & Furniture Studio
+# FurnitureAura AI — Spatial Interior & Furniture Architecture Platform
 
-> Production-ready spatial AI interior staging platform powered by **Black Forest Labs Flux-2 Klein 4B** (`black-forest-labs/flux-2-klein-4b`), **Google Gemini 2.5 Flash** (`gemini-2.5-flash`), and **Clerk Authentication**.
+> **100% Pure Supabase Production Architecture.** A spatial interior staging platform powered by **Black Forest Labs Flux-2 Klein 4B**, **Google Gemini 2.5 Flash**, **Supabase Edge Functions**, and **Clerk Authentication**.
+
+---
+
+## 🏛️ Architectural Overview
+
+FurnitureAura AI operates as a serverless Single-Page Application (SPA) powered entirely by **Supabase Backend-as-a-Service (BaaS)** and **Vite React**:
+
+```
+┌────────────────────────────────────────────────────────┐
+│              Client (Vite React 18 SPA)               │
+│      Alabaster & Burnished Brass Luxury Editorial      │
+└───────────────────────────┬────────────────────────────┘
+                            │
+               Supabase JS Client & Auth
+                            │
+        ┌───────────────────┴───────────────────┐
+        ▼                                       ▼
+┌───────────────────────────────┐   ┌───────────────────────────────┐
+│     Supabase Edge Functions   │   │  Supabase PostgreSQL Database │
+│   (Serverless Deno Runtimes)  │   │  - Strict Row Level Security  │
+├───────────────────────────────┤   │  - Atomic Credit Stored Procs │
+│ • analyze-room (Gemini Vision)│   │  - Role Constraints           │
+│ • analyze-reference (Geometry)│   │  - Realtime Telemetry Sync    │
+│ • generate-staging (Flux-2)   │   └───────────────────────────────┘
+└───────────────┬───────────────┘
+                │
+        Upstream AI APIs
+        (Replicate / Google)
+```
+
+- **Zero Node Server Dependencies**: The application contains no Express or Node.js server processes, eliminating server uptime maintenance, localhost proxy friction, and port collision vulnerabilities.
+- **Serverless Edge AI**: AI model keys (`REPLICATE_API_KEY`) and privileged credentials (`SUPABASE_SERVICE_ROLE_KEY`) are secured inside Supabase Edge Function environment secrets.
+- **Database Row Level Security (RLS)**: Enforces table-level access control on `profiles`, `stores`, `catalog_items`, `staging_events`, `quotes`, `auraroom_projects`, and `prediction_logs`.
+- **Atomic Credit RPCs**: Credit deductions and administrator allocations are executed via atomic PostgreSQL functions with row locking to eliminate race conditions.
 
 ---
 
 ## 🌟 Key Capabilities & Role Architecture
 
-### 1. 👑 Super Admin (You)
-- **Global Overview**: Real-time stats across all registered users, active furniture store owners (billers), total catalog items, and overall staging generations.
-- **AI Credits Management**:
-  - View every user's AI credit balance, role, plan, and generation count.
-  - Direct credit operations: `+50 Credits`, `+200 Credits`, or `Set Custom Credits`.
+### 1. 👑 Platform Super Admin
+- **Global Studio Telemetry**: Real-time stats across all registered users, verified showroom retailers, catalog pieces, and total room generations.
+- **Atomic AI Credit Management**:
+  - View every user's credit balance, role, plan, and generation count.
+  - One-click credit actions (`+50`, `+200`, or `Set Custom Credits`) executed via secure Supabase RPCs.
 - **Showroom Directory**: Comprehensive listing of connected furniture retailers, catalog sizes, and credit allocations.
-- **AI Prediction & Audit Logs**: Live stream of Gemini 2.5 Flash and Flux-2 Klein 4B API runs with latency, status, and credit burn rate.
+- **AI Prediction & Audit Logs**: Live audit stream tracking AI model executions, latencies, status, and credit cost.
 
-### 2. 🏬 Store Owners / Billers (Showroom Retailers)
-- **Showroom Admin Portal**:
-  - Manage inventory: Add, edit, or delete furniture pieces with title, category, price, dimensions, materials, and custom AI prompt descriptors.
-  - **Customer Staging Activity Tracker**: Real-time telemetry showing *which customer* staged *which furniture item* into their room, along with the room context and quote inquiries.
-  - Track conversion from visual staging to white-glove quote requests.
+### 2. 🏬 Showroom Retailer (Store Biller)
+- **Showroom Inventory Management**:
+  - Create and manage physical furniture pieces with name, category, price, dimensions, materials, and prompt descriptors.
+- **Customer Staging Activity Tracker**:
+  - Real-time telemetry tracking when a customer stages a specific catalog piece into their private room.
+- **Consultation & Quote Inquiries**:
+  - Receive itemized room staging inquiries submitted directly by customers from the spatial studio.
 
-### 3. 🛋️ Customers (Visualizer Studio & Catalog)
-- **Luxury Landing Page**: Interactive hero with a draggable before/after split slider, 4-step workflow, featured furniture collections, and credit tiers.
+### 3. 🛋️ Interior Studio Client
 - **Interactive Staging Studio**:
-  - **Room Input**: Upload room photos, pick from curated luxury rooms, or use **Live Mobile/Webcam Camera** directly in browser (`navigator.mediaDevices.getUserMedia`).
-  - **Gemini 2.5 Flash Room Vision**: Automatically identifies components (sofas, tables, chairs, floors, walls, lamps) with x/y coordinates and bounding boxes.
-  - **Canvas Touch-Pins**: Move tags with fingers/pointer, adjust target width/height percentages, or click anywhere to add a custom pin spot.
-  - **Option A (Store Catalog)**: Stage authentic physical furniture from showroom inventories with live pricing.
-  - **Option B (Custom AI Prompt)**: Type custom descriptions with luxury quick-chips.
-  - **Option C (Reference Image Upload)**: Upload or snap a photo of any real furniture piece or fabric swatch to blend into the room.
-  - **AI Image Generation**: Powered by `black-forest-labs/flux-2-klein-4b` via Replicate API.
-  - **AI Expand (Outpaint)**: Outpaint wider walls and floor scenery seamlessly.
-  - **Before/After Split Comparison & Hold v1**: Interactive draggable divider and instantaneous v1 peek.
-  - **Version Stack**: Snapshot rollback history (v1, v2, v3...).
+  - **Room Input**: Upload room photos, select curated luxury demo spaces, or snap live photos with the built-in webcam/mobile camera.
+  - **Spatial Room Vision**: Identifies room items (sofas, tables, chairs, floors, walls, lamps) with x/y coordinates and bounding boxes.
+  - **Interactive Canvas**: Adjust furniture bounding box width/height scale or click to tag new custom spots.
+  - **3 Flexible Staging Methods**:
+    - **Option A (Store Catalog)**: Stage authentic physical furniture from connected showroom inventories.
+    - **Option B (AI Prompt)**: Custom text prompting with curated luxury material chips.
+    - **Option C (Photo Reference)**: Upload or snap any furniture photo to clone into the spot with cushion silhouette locking.
+  - **Before/After Split Comparison & Hold v1**: Interactive draggable divider and instantaneous original room peek.
+  - **Version Stack**: Snapshot rollback history with non-destructive versioning.
   - **Room Estimate & Quote**: Itemized cart specification and consultation request dispatched to the store owner.
+  - **My Recent Creations**: Persistent multi-session project storage auto-saved to Supabase.
 
 ---
 
-## 🚀 Running the Production App
+## 🛠️ Local Development Setup
 
+### 1. Prerequisites
+- **Node.js**: `v18.0.0` or higher
+- **npm**: `v9.0.0` or higher
+
+### 2. Installation & Running
 ```bash
-# 1. Install dependencies (already completed)
+# Clone the repository
+git clone https://github.com/your-username/FurnitureAuraAI.git
+cd FurnitureAuraAI
+
+# Install frontend dependencies
 npm install
 
-# 2. Run both Backend Express Proxy (port 5001) and Vite Frontend (port 3000)
+# Start Vite development server (port 3000)
 npm run dev
-
-# Or run separately:
-npm run dev:server   # Node Express backend on port 5001
-npm run dev:client   # Vite React frontend on port 3000
 ```
 
 Open **`http://localhost:3000`** in your browser.
 
 ---
 
-## 🔐 Environment Configuration (`.env`)
+## 🔐 Environment Configuration
+
+Create a `.env` file in the root directory:
 
 ```env
-replicate_api_key=r8_********************************
-VITE_REPLICATE_API_KEY=r8_********************************
-VITE_CLERK_PUBLISHABLE_KEY=pk_test_********************************
-GEMINI_API_KEY=
-VITE_GEMINI_API_KEY=
-PORT=5001
+# Supabase BaaS (Client-Side)
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Authentication (Clerk)
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_key
 ```
 
-- **Replicate API**: Automatically uses your key to generate images with `black-forest-labs/flux-2-klein-4b`.
-- **Clerk Auth**: `@clerk/clerk-react` handles sign-in, sign-up, and user profile management. A quick-role switcher is also built-in for instant previewing of Super Admin, Biller, and Customer personas.
-- **Gemini API**: Uses Gemini 2.5 Flash for interior room spatial vision detection.
+### Server-Side Edge Secrets (Configure in Supabase Dashboard)
+Configure the following secrets in your Supabase project under **Project Settings → Edge Functions → Secrets**:
+
+| Secret Name | Purpose |
+|-------------|---------|
+| `REPLICATE_API_KEY` | Replicate token for Black Forest Labs Flux-2 Klein 4B staging |
+| `GEMINI_API_KEY` | Google Gemini API key for interior room vision detection |
+| `SUPABASE_URL` | Automatically populated by Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Automatically populated by Supabase |
+
+---
+
+## 🚀 Supabase Edge Functions Deployment
+
+Deploy the serverless Edge Functions to your Supabase project using the Supabase CLI:
+
+```bash
+# 1. Login to Supabase CLI
+npx supabase login
+
+# 2. Link your local repository to your remote Supabase project
+npx supabase link --project-ref urbfdlljbzfsgtvyhuko
+
+# 3. Deploy all 3 Edge Functions
+npx supabase functions deploy analyze-room
+npx supabase functions deploy analyze-reference
+npx supabase functions deploy generate-staging
+
+# 4. Set required secrets for Edge Functions
+npx supabase secrets set REPLICATE_API_KEY="your_replicate_api_key"
+npx supabase secrets set GEMINI_API_KEY="your_gemini_api_key"
+```
+
+---
+
+## 🌐 Production Deployment (Vercel)
+
+The application is pre-configured for instant zero-config deployment on Vercel:
+
+1. Import your GitHub repository into [Vercel](https://vercel.com).
+2. Set Framework Preset to **Vite**.
+3. Add the following Environment Variables in the Vercel Project Settings:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_CLERK_PUBLISHABLE_KEY`
+4. Click **Deploy**. Vercel will build the frontend using `npm run build` and serve it through the SPA rewrite rules configured in `vercel.json`.
+
+---
+
+## 🛡️ Database Migrations & Security
+
+All database tables, constraints, RPCs, and RLS policies are version-controlled in `supabase/migrations/`:
+
+- [20261025_production_security.sql](file:///Users/razinshk/Projects/FurnotureAuraAI/supabase/migrations/20261025_production_security.sql):
+  - Enforces `customer`, `biller`, and `admin` check constraints on `public.profiles`.
+  - Creates the atomic `deduct_user_credits` and `admin_adjust_credits` stored procedures with row-level locks (`FOR UPDATE`).
+  - Implements strict RLS policies ensuring users can only read/write their own profiles, projects, and events.
+  - Grants showroom billers read access to customer staging events involving their own store items.

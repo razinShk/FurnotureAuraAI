@@ -21,9 +21,10 @@ serve(async (req) => {
     }
 
     const repKey =
-      req.headers.get("x-replicate-key") ||
+      Deno.env.get("REPLICATE_API_KEY") ||
       Deno.env.get("REPLICATE_API_TOKEN") ||
       Deno.env.get("replicate_api_key") ||
+      req.headers.get("x-replicate-key") ||
       "";
 
     if (!repKey) {

@@ -35,3 +35,7 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Supabase CLI & Vercel
+supabase/.temp/
+.vercel/
