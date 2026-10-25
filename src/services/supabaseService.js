@@ -382,37 +382,55 @@ export async function syncClerkUserWithSupabase(clerkUser, role = 'customer') {
   };
 
   try {
+    // 1. Query by email to prevent Postgres UUID parse error for Clerk IDs (e.g. user_...)
     const { data: existing, error: readError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', clerkUser.id)
+      .eq('email', email)
       .maybeSingle();
-    if (readError) throw readError;
 
     if (existing) {
       const updatePayload = {
-        ...identity,
+        name,
+        avatar_url: avatarUrl,
         role: effectiveRole,
         credits: isSuperAdmin ? Math.max(existing.credits || 0, 5000) : (existing.credits ?? 100),
-        plan: isSuperAdmin ? 'Super Admin Unlimited' : (existing.plan || 'Free Explorer')
+        plan: isSuperAdmin ? 'Super Admin Unlimited' : (existing.plan || 'Free Explorer'),
+        updated_at: new Date().toISOString()
       };
       const { data: updated } = await supabase
         .from('profiles')
         .update(updatePayload)
-        .eq('id', clerkUser.id)
+        .eq('id', existing.id)
         .select()
         .maybeSingle();
-      return updated || { ...existing, ...updatePayload };
+      return updated || { ...existing, ...updatePayload, id: clerkUser.id };
     }
 
     // First sign-in: create the profile with the starter allowance for the role.
     const fresh = {
-      ...identity,
+      email,
+      name,
+      avatar_url: avatarUrl,
+      role: effectiveRole,
       credits: isSuperAdmin ? 5000 : (effectiveRole === 'admin' ? 5000 : effectiveRole === 'biller' ? 850 : 100),
-      plan: isSuperAdmin ? 'Super Admin Unlimited' : (effectiveRole === 'admin' ? 'Super Admin Unlimited' : effectiveRole === 'biller' ? 'Retailer Enterprise' : 'Free Explorer')
+      plan: isSuperAdmin ? 'Super Admin Unlimited' : (effectiveRole === 'admin' ? 'Super Admin Unlimited' : effectiveRole === 'biller' ? 'Retailer Enterprise' : 'Free Explorer'),
+      updated_at: new Date().toISOString()
     };
-    const { data: inserted } = await supabase.from('profiles').insert([fresh]).select().maybeSingle();
-    return inserted || fresh;
+
+    // If clerkUser.id happens to be a valid UUID, include it; otherwise omit id to let Supabase generate a valid UUID
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clerkUser.id)) {
+      fresh.id = clerkUser.id;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('profiles')
+      .insert([fresh])
+      .select()
+      .maybeSingle();
+
+    if (insertError) throw insertError;
+    return inserted || { ...fresh, id: clerkUser.id };
   } catch (err) {
     console.log('Supabase profile sync note:', err.message);
     return {

@@ -28,7 +28,8 @@ import {
   LogIn,
   RotateCcw,
   Edit2,
-  Edit3
+  Edit3,
+  FolderHeart
 } from 'lucide-react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import RoomQuoteModal from '../components/RoomQuoteModal';
