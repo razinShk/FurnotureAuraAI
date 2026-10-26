@@ -177,6 +177,7 @@ export default function App() {
   };
 
   const isStudio = currentPage === 'studio';
+  const isAuthPage = ['auth', 'signin', 'signup', 'roles'].includes(currentPage);
   const canAccess = (page) => {
     if (page === 'admin') return role === 'admin';
     if (page === 'biller') return role === 'biller' || role === 'admin';
@@ -188,6 +189,21 @@ export default function App() {
       ? '—'
       : currentUser.credits.toLocaleString()
     : '0';
+
+  // Dedicated standalone full-page view for authentication
+  if (isAuthPage) {
+    return (
+      <div className="min-h-[100dvh] bg-[#faf8f5] dark:bg-[#121110] text-stone-900 dark:text-stone-100 transition-colors duration-200">
+        <AuthPage
+          currentUser={currentUser}
+          activeRole={role}
+          initialTab={currentPage === 'signup' ? 'signup' : currentPage === 'roles' ? 'roles' : 'signin'}
+          onNavigate={navigateTo}
+        />
+        <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} currentUser={currentUser} activeRole={role} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 lg:flex">
@@ -402,14 +418,6 @@ export default function App() {
               />
             ))}
 
-          {['auth', 'signin', 'signup', 'roles'].includes(currentPage) && (
-            <AuthPage
-              currentUser={currentUser}
-              activeRole={role}
-              initialTab={currentPage === 'signup' ? 'signup' : currentPage === 'roles' ? 'roles' : 'signin'}
-              onNavigate={navigateTo}
-            />
-          )}
         </main>
       </div>
 

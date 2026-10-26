@@ -257,3 +257,47 @@ html.dark .glass-panel { background: rgba(26, 25, 24, 0.88); border: 1px solid r
 html.dark .glass-card { background: #1a1918; border: 1px solid #2b2825; box-shadow: none; }
 
 input[type="range"] { accent-color: #c59b63; }
+
+/* ---------- Clerk Luxury Styling Overrides ---------- */
+.clerk-auth-container .cl-card {
+  box-shadow: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+.clerk-auth-container .cl-headerTitle,
+.clerk-auth-container .cl-headerSubtitle {
+  display: none !important; /* Hide Clerk's internal app title so custom serif typography shines */
+}
+.clerk-auth-container .cl-formButtonPrimary {
+  background: #c59b63 !important;
+  color: #ffffff !important;
+  border-radius: 0.75rem !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 14px rgba(197, 155, 99, 0.25) !important;
+  transition: all 0.15s ease !important;
+}
+.clerk-auth-container .cl-formButtonPrimary:hover {
+  background: #b3884d !important;
+}
+.clerk-auth-container .cl-alert {
+  border-radius: 0.75rem !important;
+  border: 1px solid #fecdd3 !important;
+  background-color: #fff1f2 !important;
+  padding: 0.75rem 1rem !important;
+  margin-bottom: 1rem !important;
+}
+html.dark .clerk-auth-container .cl-alert {
+  border: 1px solid rgba(244, 63, 94, 0.3) !important;
+  background-color: rgba(136, 19, 55, 0.25) !important;
+}
+.clerk-auth-container .cl-alertText {
+  color: #be123c !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+html.dark .clerk-auth-container .cl-alertText {
+  color: #fda4af !important;
+}
