@@ -110,8 +110,8 @@ export default function CustomerStudio({
   // Recent Creations State
   const [recentCreations, setRecentCreations] = useState([]);
 
-  // Staging Replacement Modes (A: Store Catalog, B: Custom Prompt, C: Reference Photo)
-  const [activeOption, setActiveOption] = useState('A'); // 'A' | 'B' | 'C'
+  // Staging Replacement Modes (C: Reference Photo, A: Store Catalog, B: Custom Prompt)
+  const [activeOption, setActiveOption] = useState(() => initialCatalogItem ? 'A' : 'C'); // 'C' | 'A' | 'B'
   const [catalogItems, setCatalogItems] = useState([]);
   const [activeCatalogCategory, setActiveCatalogCategory] = useState('all');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState(null);
@@ -220,7 +220,7 @@ export default function CustomerStudio({
       setRoomTitle(savedSession.roomTitle || 'My Staged Room');
       setCurrentRoomTotal(savedSession.currentRoomTotal || 0);
       setStagedStoreItems(savedSession.stagedStoreItems || []);
-      setActiveOption(savedSession.activeOption || 'A');
+      setActiveOption(savedSession.activeOption || 'C');
       setCustomPromptText(savedSession.customPromptText || '');
 
       if (savedSession.versionHistory && savedSession.versionHistory.length > 0) {
@@ -1647,6 +1647,18 @@ export default function CustomerStudio({
               </div>
               <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                 <button
+                  onClick={() => setActiveOption('C')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                    activeOption === 'C'
+                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Camera size={15} />
+                  <span>Photo Ref</span>
+                </button>
+
+                <button
                   onClick={() => setActiveOption('A')}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'A'
@@ -1669,141 +1681,8 @@ export default function CustomerStudio({
                   <Sparkles size={15} />
                   <span>AI Prompt</span>
                 </button>
-
-                <button
-                  onClick={() => setActiveOption('C')}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-                    activeOption === 'C'
-                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Camera size={15} />
-                  <span>Photo Ref</span>
-                </button>
               </div>
             </div>
-
-            {/* TAB CONTENT A: SHOWROOM CATALOG */}
-            {activeOption === 'A' && (
-              <div className="space-y-3">
-                {/* Search & Category Pills */}
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
-                    placeholder="Search catalog pieces, fabrics, marble..."
-                    className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
-                  />
-
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
-                    {['all', 'sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setActiveCatalogCategory(cat)}
-                        className={`px-3 py-1 rounded-lg text-[10px] font-bold capitalize transition-colors shrink-0 ${
-                          activeCatalogCategory === cat
-                            ? 'bg-brand-500 text-white shadow-sm'
-                            : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
-                        }`}
-                      >
-                        {cat === 'all' ? 'All' : `${cat}s`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Items Grid */}
-                {filteredCatalog.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
-                    No matching pieces found. Try switching categories or clearing search.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 max-h-[280px] lg:max-h-[380px] overflow-y-auto pr-1">
-                    {filteredCatalog.map((item) => {
-                      const isSel = selectedCatalogItem?.id === item.id;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => setSelectedCatalogItem(item)}
-                          className={`p-2.5 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer group ${
-                            isSel
-                              ? 'bg-brand-50/80 dark:bg-brand-950/30 border-brand-500 shadow-md ring-2 ring-brand-500/20'
-                              : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
-                          }`}
-                        >
-                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 mb-2">
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                            {isSel && (
-                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-md">
-                                <Check size={12} strokeWidth={3} />
-                              </div>
-                            )}
-                            <div
-                              className="absolute bottom-1.5 left-1.5 w-3 h-3 rounded-full border border-white shadow-sm"
-                              style={{ backgroundColor: item.color || '#c59b63' }}
-                            />
-                          </div>
-
-                          <div>
-                            <div className="text-[11px] font-extrabold text-stone-900 dark:text-white truncate">
-                              {item.name}
-                            </div>
-                            <div className="text-[10px] text-stone-400 truncate">
-                              {item.material || 'Architectural Grade'}
-                            </div>
-                            <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
-                              ${Number(item.price || 0).toLocaleString()}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB CONTENT B: AI TEXT PROMPT */}
-            {activeOption === 'B' && (
-              <div className="space-y-3">
-                <textarea
-                  rows={3}
-                  value={customPromptText}
-                  onChange={(e) => setCustomPromptText(e.target.value)}
-                  placeholder="Describe your desired furniture, fabric upholstery, marble vein texture, or wood grain..."
-                  className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 resize-none shadow-sm leading-relaxed"
-                />
-
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-                    Curated Luxury Prompts:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'Curved bouclé sofa with brushed brass legs',
-                      'Italian cognac full-grain leather Chesterfield',
-                      'Calacatta marble tiles with subtle gold veins',
-                      'Warm honey oak herringbone wood parquet flooring',
-                      'Minimalist matte black steel arc lamp'
-                    ].map((chip, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCustomPromptText(chip)}
-                        className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-semibold transition-colors"
-                      >
-                        ✨ {chip}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* TAB CONTENT C: UPLOAD PHOTO REFERENCE */}
             {activeOption === 'C' && (
@@ -1941,6 +1820,127 @@ export default function CustomerStudio({
                 )}
               </div>
             )}
+
+            {/* TAB CONTENT A: SHOWROOM CATALOG */}
+            {activeOption === 'A' && (
+              <div className="space-y-3">
+                {/* Search & Category Pills */}
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={catalogSearch}
+                    onChange={(e) => setCatalogSearch(e.target.value)}
+                    placeholder="Search catalog pieces, fabrics, marble..."
+                    className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
+                  />
+
+                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                    {['all', 'sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setActiveCatalogCategory(cat)}
+                        className={`px-3 py-1 rounded-lg text-[10px] font-bold capitalize transition-colors shrink-0 ${
+                          activeCatalogCategory === cat
+                            ? 'bg-brand-500 text-white shadow-sm'
+                            : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                        }`}
+                      >
+                        {cat === 'all' ? 'All' : `${cat}s`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Items Grid */}
+                {filteredCatalog.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
+                    No matching pieces found. Try switching categories or clearing search.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2.5 max-h-[280px] lg:max-h-[380px] overflow-y-auto pr-1">
+                    {filteredCatalog.map((item) => {
+                      const isSel = selectedCatalogItem?.id === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setSelectedCatalogItem(item)}
+                          className={`p-2.5 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer group ${
+                            isSel
+                              ? 'bg-brand-50/80 dark:bg-brand-950/30 border-brand-500 shadow-md ring-2 ring-brand-500/20'
+                              : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
+                          }`}
+                        >
+                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 mb-2">
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            {isSel && (
+                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-md">
+                                <Check size={12} strokeWidth={3} />
+                              </div>
+                            )}
+                            <div
+                              className="absolute bottom-1.5 left-1.5 w-3 h-3 rounded-full border border-white shadow-sm"
+                              style={{ backgroundColor: item.color || '#c59b63' }}
+                            />
+                          </div>
+
+                          <div>
+                            <div className="text-[11px] font-extrabold text-stone-900 dark:text-white truncate">
+                              {item.name}
+                            </div>
+                            <div className="text-[10px] text-stone-400 truncate">
+                              {item.material || 'Architectural Grade'}
+                            </div>
+                            <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                              ${Number(item.price || 0).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB CONTENT B: AI TEXT PROMPT */}
+            {activeOption === 'B' && (
+              <div className="space-y-3">
+                <textarea
+                  rows={3}
+                  value={customPromptText}
+                  onChange={(e) => setCustomPromptText(e.target.value)}
+                  placeholder="Describe your desired furniture, fabric upholstery, marble vein texture, or wood grain..."
+                  className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 resize-none shadow-sm leading-relaxed"
+                />
+
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                    Curated Luxury Prompts:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Curved bouclé sofa with brushed brass legs',
+                      'Italian cognac full-grain leather Chesterfield',
+                      'Calacatta marble tiles with subtle gold veins',
+                      'Warm honey oak herringbone wood parquet flooring',
+                      'Minimalist matte black steel arc lamp'
+                    ].map((chip, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCustomPromptText(chip)}
+                        className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-semibold transition-colors"
+                      >
+                        ✨ {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* =========================================================================
@@ -1976,7 +1976,7 @@ export default function CustomerStudio({
               >
                 <Sparkles size={18} />
                 <span>
-                  Stage {selectedPin?.name || 'Spot'} ({activeOption === 'A' ? selectedCatalogItem?.name || 'Catalog' : activeOption === 'B' ? 'Custom Prompt' : 'Photo Clone'})
+                  Stage {selectedPin?.name || 'Spot'} ({activeOption === 'C' ? 'Photo Clone' : activeOption === 'A' ? selectedCatalogItem?.name || 'Catalog' : 'Custom Prompt'})
                 </span>
                 <span className="text-xs opacity-80 font-normal ml-1">• 2 Credits</span>
               </button>
