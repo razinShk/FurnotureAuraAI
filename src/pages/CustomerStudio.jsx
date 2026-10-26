@@ -21,6 +21,7 @@ import {
   Clock,
   ArrowLeft,
   X,
+  Move,
   SlidersHorizontal,
   ChevronUp,
   Image as ImageIcon,
@@ -227,8 +228,56 @@ export default function CustomerStudio({
         setActiveVersionIndex(savedSession.activeVersionIndex || 0);
       }
       if (savedSession.componentPins && savedSession.componentPins.length > 0) {
-        setComponentPins(savedSession.componentPins);
-        setSelectedPinId(savedSession.selectedPinId || savedSession.componentPins[0]?.id);
+        // Detect if pins are missing IDs or are clustered at identical coordinates from previous session
+        const seenIds = new Set();
+        const coordsCount = {};
+        savedSession.componentPins.forEach(p => {
+          const key = `${Math.round(p.x || 50)}-${Math.round(p.y || 50)}`;
+          coordsCount[key] = (coordsCount[key] || 0) + 1;
+        });
+        const isClustered = Object.values(coordsCount).some(count => count >= 3);
+
+        const defaultPositions = [
+          { x: 48, y: 34 }, // Chandelier / Top
+          { x: 22, y: 46 }, // Wall Art / Upper Left
+          { x: 30, y: 53 }, // Wall / Upper Center
+          { x: 62, y: 58 }, // Sconce / Upper Right
+          { x: 28, y: 68 }, // Sectional Sofa / Mid
+          { x: 42, y: 76 }, // Coffee Table / Lower Center
+          { x: 58, y: 78 }, // Media Console / Lower Right
+          { x: 38, y: 84 }, // Area Rug / Bottom
+        ];
+
+        const sanitized = savedSession.componentPins.map((c, idx) => {
+          let safeId = c.id;
+          if (!safeId || seenIds.has(safeId)) {
+            safeId = `pin-restored-${idx + 1}-${Date.now().toString(36)}`;
+          }
+          seenIds.add(safeId);
+
+          let posX = Number(c.x || 50);
+          let posY = Number(c.y || 50);
+
+          if (isClustered) {
+            const fallbackPos = defaultPositions[idx % defaultPositions.length];
+            posX = fallbackPos.x;
+            posY = fallbackPos.y;
+          }
+
+          return {
+            ...c,
+            id: safeId,
+            name: c.name || `Spot ${idx + 1}`,
+            category: c.category || 'sofa',
+            boxW: Math.max(14, Math.min(80, Number(c.boxW || c.width || 34))),
+            boxH: Math.max(12, Math.min(65, Number(c.boxH || c.height || 22))),
+            x: Math.max(5, Math.min(95, posX)),
+            y: Math.max(5, Math.min(95, posY))
+          };
+        });
+
+        setComponentPins(sanitized);
+        setSelectedPinId(sanitized[0]?.id);
       }
 
       // Draw restored canvas
@@ -413,10 +462,20 @@ export default function CustomerStudio({
       const data = await analyzeRoomSpatial(base64Data, 'image/jpeg', currentUser.id);
 
       if (data && data.components && data.components.length > 0) {
-        setComponentPins(data.components);
-        setSelectedPinId(data.components[0].id);
-        setStatusBanner(`✅ Detected ${data.components.length} architectural spots! Select a tag to stage furniture.`);
-        toast.success(`Spatial Vision: Detected ${data.components.length} architectural spots!`);
+        const sanitized = data.components.map((c, idx) => ({
+          ...c,
+          id: c.id ? String(c.id) : `pin-vision-${idx + 1}-${Date.now().toString(36)}`,
+          name: c.name || `Furniture Spot ${idx + 1}`,
+          category: c.category || 'sofa',
+          x: Math.max(5, Math.min(95, Number(c.x || (25 + (idx * 12) % 60)))),
+          y: Math.max(5, Math.min(95, Number(c.y || (30 + (idx * 10) % 55)))),
+          boxW: Math.max(14, Math.min(80, Number(c.boxW || c.width || 34))),
+          boxH: Math.max(12, Math.min(65, Number(c.boxH || c.height || 22)))
+        }));
+        setComponentPins(sanitized);
+        setSelectedPinId(sanitized[0].id);
+        setStatusBanner(`✅ Detected ${sanitized.length} architectural spots! Select a tag to stage furniture.`);
+        toast.success(`Spatial Vision: Detected ${sanitized.length} architectural spots!`);
       } else {
         // Fallback default pins
         const defaultPins = [
@@ -757,6 +816,7 @@ export default function CustomerStudio({
 
   // Draggable Pin Pointer Event
   const handlePinPointerDown = (e, pin) => {
+    if (!pin || !pin.id) return;
     e.stopPropagation();
     setSelectedPinId(pin.id);
     const container = pinsContainerRef.current;
@@ -803,6 +863,28 @@ export default function CustomerStudio({
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('touchmove', onPointerMove, { passive: false });
     window.addEventListener('touchend', onPointerUp);
+  };
+
+  // Auto-Spread overlapping/clustered spot tags across room architecture
+  const autoSpreadSpots = () => {
+    if (!componentPins || componentPins.length === 0) return;
+    const defaultPositions = [
+      { x: 48, y: 34 }, // Chandelier / Top
+      { x: 22, y: 46 }, // Wall Art / Upper Left
+      { x: 30, y: 53 }, // Wall / Upper Center
+      { x: 62, y: 58 }, // Sconce / Upper Right
+      { x: 28, y: 68 }, // Sectional Sofa / Mid
+      { x: 42, y: 76 }, // Coffee Table / Lower Center
+      { x: 58, y: 78 }, // Media Console / Lower Right
+      { x: 38, y: 84 }, // Area Rug / Bottom
+    ];
+    const spread = componentPins.map((p, idx) => ({
+      ...p,
+      x: defaultPositions[idx % defaultPositions.length].x,
+      y: defaultPositions[idx % defaultPositions.length].y
+    }));
+    setComponentPins(spread);
+    toast.success('Spread tags across distinct architectural areas.');
   };
 
   // Add custom pin by clicking on stage canvas
@@ -854,7 +936,7 @@ export default function CustomerStudio({
     link.click();
   };
 
-  const selectedPin = componentPins.find(p => p.id === selectedPinId) || componentPins[0];
+  const selectedPin = (selectedPinId && componentPins.find(p => p.id && p.id === selectedPinId)) || componentPins[0] || null;
   const filteredCatalog = catalogItems.filter(item => {
     const matchCat = activeCatalogCategory === 'all' || item.category === activeCatalogCategory;
     const matchSearch = !catalogSearch || item.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (item.material || '').toLowerCase().includes(catalogSearch.toLowerCase());
@@ -1095,6 +1177,14 @@ export default function CustomerStudio({
                   <RefreshCw size={11} />
                   <span className="hidden xs:inline">Re-Scan</span>
                 </button>
+                <button
+                  onClick={() => autoSpreadSpots()}
+                  className="text-xs text-stone-600 dark:text-stone-400 hover:text-[#c59b63] font-bold flex items-center gap-1"
+                  title="Auto-spread overlapping tags across distinct architectural areas"
+                >
+                  <Move size={11} />
+                  <span className="hidden xs:inline">Auto-Spread</span>
+                </button>
               </div>
             )}
           </div>
@@ -1243,19 +1333,15 @@ export default function CustomerStudio({
                   }`}
                 >
                   {componentPins.map((pin) => {
-                    const isSelected = pin.id === selectedPinId;
-                    const w = pin.boxW || 34;
-                    const h = pin.boxH || 22;
+                    const isSelected = Boolean(selectedPinId && pin.id && pin.id === selectedPinId);
+                    const w = Math.max(14, Math.min(85, Number(pin.boxW || pin.width || 34)));
+                    const h = Math.max(12, Math.min(65, Number(pin.boxH || pin.height || 22)));
                     return (
-                      <React.Fragment key={pin.id}>
-                        {/* 1. Architectural Bounding Box (Render ONLY for the active selected furniture item) */}
+                      <React.Fragment key={pin.id || `pin-frag-${pin.name}`}>
+                        {/* 1. Architectural Bounding Box (Render ONLY for the single active selected furniture item) */}
                         {isSelected && (
                           <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedPinId(pin.id);
-                            }}
-                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-auto cursor-pointer border-2 border-dashed border-brand-500 bg-brand-500/15 shadow-[0_0_25px_rgba(197,155,99,0.35)] ring-2 ring-white/60 z-35"
+                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-none border-2 border-dashed border-brand-500 bg-brand-500/15 shadow-[0_0_25px_rgba(197,155,99,0.35)] ring-2 ring-white/60 z-20 select-none"
                             style={{
                               left: `${pin.x}%`,
                               top: `${pin.y}%`,
@@ -1279,6 +1365,10 @@ export default function CustomerStudio({
                         {/* 2. Interactive Pin Tag Button */}
                         <div
                           onPointerDown={(e) => handlePinPointerDown(e, pin)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPinId(pin.id);
+                          }}
                           className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-extrabold flex items-center gap-1.5 shadow-xl transition-all select-none pointer-events-auto ${
                             isSelected
                               ? 'bg-brand-500 text-white ring-4 ring-brand-500/35 scale-110 z-40'

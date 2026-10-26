@@ -117,6 +117,19 @@ Output strictly valid JSON only without markdown or code fences.`,
         }
       }
 
+      if (apiResult && Array.isArray(apiResult.components)) {
+        apiResult.components = apiResult.components.map((c: any, idx: number) => ({
+          ...c,
+          id: c.id ? String(c.id) : `pin-${idx + 1}-${Date.now().toString(36)}`,
+          name: c.name || `Furniture Spot ${idx + 1}`,
+          category: c.category || "sofa",
+          x: Math.max(5, Math.min(95, Number(c.x || (25 + (idx * 12) % 60)))),
+          y: Math.max(5, Math.min(95, Number(c.y || (30 + (idx * 10) % 55)))),
+          boxW: Math.max(14, Math.min(80, Number(c.boxW || c.width || 34))),
+          boxH: Math.max(12, Math.min(65, Number(c.boxH || c.height || 22)))
+        }));
+      }
+
       return new Response(JSON.stringify({ success: true, ...apiResult }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
