@@ -119,6 +119,13 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  // Whenever the user completes sign-in or sign-up, directly take them to the studio
+  useEffect(() => {
+    if (isLoaded && isSignedIn && ['auth', 'signin', 'signup'].includes(currentPage)) {
+      navigateTo('studio');
+    }
+  }, [isLoaded, isSignedIn, currentPage]);
+
   // Current active user object (null if logged out)
   const currentUser = useMemo(() => {
     if (!isSignedIn || !user) {

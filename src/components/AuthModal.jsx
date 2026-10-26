@@ -1,12 +1,20 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Lock, Sparkles, Info } from 'lucide-react';
-import { SignIn, SignUp } from '@clerk/clerk-react';
+import { SignIn, SignUp, useUser } from '@clerk/clerk-react';
 import { useTheme } from '../context/ThemeContext';
 
 export default function AuthModal({ isOpen, onClose }) {
   const [clerkMode, setClerkMode] = useState('sign-in'); // 'sign-in' | 'sign-up'
   const { isDark } = useTheme();
+  const { isSignedIn } = useUser();
   const hasClerkKey = Boolean(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
+
+  // Auto-close modal when authentication succeeds
+  useEffect(() => {
+    if (isOpen && isSignedIn) {
+      onClose();
+    }
+  }, [isOpen, isSignedIn, onClose]);
 
   const clerkAppearance = useMemo(() => ({
     variables: {
@@ -115,7 +123,9 @@ export default function AuthModal({ isOpen, onClose }) {
                 <SignIn 
                   routing="hash"
                   signUpUrl="#signup"
+                  forceRedirectUrl="/#studio"
                   fallbackRedirectUrl="/#studio"
+                  signUpForceRedirectUrl="/#studio"
                   signUpFallbackRedirectUrl="/#studio"
                   appearance={clerkAppearance}
                 />
@@ -123,7 +133,9 @@ export default function AuthModal({ isOpen, onClose }) {
                 <SignUp 
                   routing="hash"
                   signInUrl="#signin"
+                  forceRedirectUrl="/#studio"
                   fallbackRedirectUrl="/#studio"
+                  signInForceRedirectUrl="/#studio"
                   signInFallbackRedirectUrl="/#studio"
                   appearance={clerkAppearance}
                 />

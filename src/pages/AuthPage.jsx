@@ -45,6 +45,13 @@ export default function AuthPage({
     }
   }, [initialTab]);
 
+  // When authentication succeeds, directly take the user to the studio
+  useEffect(() => {
+    if (isSignedIn) {
+      onNavigate('studio');
+    }
+  }, [isSignedIn, onNavigate]);
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (typeof window !== 'undefined') {
@@ -380,7 +387,9 @@ export default function AuthPage({
                       <SignIn 
                         routing="hash"
                         signUpUrl="#signup"
+                        forceRedirectUrl="/#studio"
                         fallbackRedirectUrl="/#studio"
+                        signUpForceRedirectUrl="/#studio"
                         signUpFallbackRedirectUrl="/#studio"
                         appearance={clerkAppearance}
                       />
@@ -420,7 +429,9 @@ export default function AuthPage({
                       <SignUp 
                         routing="hash"
                         signInUrl="#signin"
+                        forceRedirectUrl="/#studio"
                         fallbackRedirectUrl="/#studio"
+                        signInForceRedirectUrl="/#studio"
                         signInFallbackRedirectUrl="/#studio"
                         appearance={clerkAppearance}
                       />
