@@ -30,7 +30,8 @@ import {
   RotateCcw,
   Edit2,
   Edit3,
-  FolderHeart
+  FolderHeart,
+  ZoomIn
 } from 'lucide-react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import RoomQuoteModal from '../components/RoomQuoteModal';
@@ -96,6 +97,8 @@ export default function CustomerStudio({
 
   // Room Image & Pin State
   const [currentRoomUrl, setCurrentRoomUrl] = useState(null);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0, isPortrait: false, aspectRatio: 1 });
+  const [viewScaleMode, setViewScaleMode] = useState('fit'); // 'fit' | 'native'
   const [roomTitle, setRoomTitle] = useState('Untitled Room');
   const [componentPins, setComponentPins] = useState([]);
   const [selectedPinId, setSelectedPinId] = useState(null);
@@ -288,14 +291,25 @@ export default function CustomerStudio({
         const beforeCanvas = beforeCanvasRef.current;
         if (!canvas || !beforeCanvas) return;
 
-        canvas.width = img.width;
-        canvas.height = img.height;
-        beforeCanvas.width = img.width;
-        beforeCanvas.height = img.height;
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        canvas.width = w;
+        canvas.height = h;
+        beforeCanvas.width = w;
+        beforeCanvas.height = h;
 
         const ctx = canvas.getContext('2d');
         const bCtx = beforeCanvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        bCtx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        setImageDimensions({
+          width: w,
+          height: h,
+          isPortrait: h > w,
+          aspectRatio: w / (h || 1)
+        });
 
         // Before canvas uses v1 if available
         const v1 = savedSession.versionHistory?.[0]?.dataUrl;
@@ -394,13 +408,17 @@ export default function CustomerStudio({
       const beforeCanvas = beforeCanvasRef.current;
       if (!canvas || !beforeCanvas) return;
 
-      const maxW = 1400;
-      const maxH = 900;
-      let w = img.width;
-      let h = img.height;
-      const ratio = Math.min(maxW / w, maxH / h);
-      w = Math.round(w * ratio);
-      h = Math.round(h * ratio);
+      const naturalW = img.naturalWidth || img.width;
+      const naturalH = img.naturalHeight || img.height;
+      // Preserve full native resolution and exact aspect ratio (limit to 2560px max to prevent browser canvas OOM on 8K)
+      const maxDim = 2560;
+      let w = naturalW;
+      let h = naturalH;
+      if (Math.max(w, h) > maxDim) {
+        const scale = maxDim / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
 
       canvas.width = w;
       canvas.height = h;
@@ -409,8 +427,17 @@ export default function CustomerStudio({
 
       const ctx = canvas.getContext('2d');
       const bCtx = beforeCanvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      bCtx.clearRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
       bCtx.drawImage(img, 0, 0, w, h);
+
+      setImageDimensions({
+        width: w,
+        height: h,
+        isPortrait: h > w,
+        aspectRatio: w / (h || 1)
+      });
 
       // Save Initial Version
       const initialVer = {
@@ -523,8 +550,23 @@ export default function CustomerStudio({
     const ctx = canvas.getContext('2d');
     const img = new Image();
     img.onload = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      canvas.width = w;
+      canvas.height = h;
+      const beforeCanvas = beforeCanvasRef.current;
+      if (beforeCanvas) {
+        beforeCanvas.width = w;
+        beforeCanvas.height = h;
+      }
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      setImageDimensions({
+        width: w,
+        height: h,
+        isPortrait: h > w,
+        aspectRatio: w / (h || 1)
+      });
       setComponentPins(JSON.parse(JSON.stringify(target.pinsSnapshot)));
       setCurrentRoomTotal(target.totalPrice);
     };
@@ -657,8 +699,39 @@ export default function CustomerStudio({
           genImg.crossOrigin = 'anonymous';
         }
         genImg.onload = async () => {
+          const genW = genImg.naturalWidth || genImg.width;
+          const genH = genImg.naturalHeight || genImg.height;
+
+          // Directly adopt the EXACT format, height, and width output by the AI
+          canvas.width = genW;
+          canvas.height = genH;
           const ctx = canvas.getContext('2d');
-          ctx.drawImage(genImg, 0, 0, canvas.width, canvas.height);
+          ctx.clearRect(0, 0, genW, genH);
+          ctx.drawImage(genImg, 0, 0, genW, genH);
+
+          // Update beforeCanvas to match dimensions for seamless split comparison
+          const beforeCanvas = beforeCanvasRef.current;
+          if (beforeCanvas) {
+            beforeCanvas.width = genW;
+            beforeCanvas.height = genH;
+            const bCtx = beforeCanvas.getContext('2d');
+            bCtx.clearRect(0, 0, genW, genH);
+            const v1Url = versionHistory?.[0]?.dataUrl;
+            if (v1Url) {
+              const bImg = new Image();
+              bImg.onload = () => bCtx.drawImage(bImg, 0, 0, genW, genH);
+              bImg.src = v1Url;
+            }
+          }
+
+          // Track orientation & dimensions so surroundings dynamically adjust
+          setImageDimensions({
+            width: genW,
+            height: genH,
+            isPortrait: genH > genW,
+            aspectRatio: genW / (genH || 1)
+          });
+          setCurrentRoomUrl(data.imageUrl);
 
           let updatedTotal = currentRoomTotal;
           let updatedStaged = [...stagedStoreItems];
@@ -753,22 +826,38 @@ export default function CustomerStudio({
     showLoading('Expanding Architectural Room Canvas...', 'Synthesizing extended floorboards and ceiling planes...');
 
     setTimeout(() => {
-      const pad = 60;
+      const pad = Math.round(canvas.width * 0.08);
+      const newW = canvas.width + pad * 2;
+      const newH = canvas.height;
       const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width + pad * 2;
-      tempCanvas.height = canvas.height;
+      tempCanvas.width = newW;
+      tempCanvas.height = newH;
       const tCtx = tempCanvas.getContext('2d');
 
       tCtx.fillStyle = '#f8fafc';
-      tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+      tCtx.fillRect(0, 0, newW, newH);
       tCtx.filter = 'blur(10px)';
-      tCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+      tCtx.drawImage(canvas, 0, 0, newW, newH);
       tCtx.filter = 'none';
-      tCtx.drawImage(canvas, pad, 0, tempCanvas.width - pad * 2, tempCanvas.height);
+      tCtx.drawImage(canvas, pad, 0, newW - pad * 2, newH);
 
+      canvas.width = newW;
+      canvas.height = newH;
+      const beforeCanvas = beforeCanvasRef.current;
+      if (beforeCanvas) {
+        beforeCanvas.width = newW;
+        beforeCanvas.height = newH;
+      }
       const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(tempCanvas, 0, 0);
+      ctx.clearRect(0, 0, newW, newH);
+      ctx.drawImage(tempCanvas, 0, 0, newW, newH);
+
+      setImageDimensions({
+        width: newW,
+        height: newH,
+        isPortrait: newH > newW,
+        aspectRatio: newW / (newH || 1)
+      });
 
       const nextVer = versionHistory.length + 1;
       saveNewVersion(`v${nextVer}: AI Expanded Room`);
@@ -931,7 +1020,8 @@ export default function CustomerStudio({
     const canvas = roomCanvasRef.current;
     if (!canvas) return;
     const link = document.createElement('a');
-    link.download = `FurnitureAura-Design-v${activeVersionIndex + 1}.png`;
+    const dimSuffix = imageDimensions.width && imageDimensions.height ? `-${imageDimensions.width}x${imageDimensions.height}` : '';
+    link.download = `FurnitureAura-Design-v${activeVersionIndex + 1}${dimSuffix}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -1160,6 +1250,14 @@ export default function CustomerStudio({
 
             {currentRoomUrl && (
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                {imageDimensions.width > 0 && (
+                  <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-[10px] font-mono font-bold text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                    <span>{imageDimensions.width}×{imageDimensions.height}</span>
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-brand-500/10 text-brand-600 dark:text-brand-400 uppercase">
+                      {imageDimensions.isPortrait ? 'Portrait' : imageDimensions.width === imageDimensions.height ? '1:1 Square' : 'Landscape'}
+                    </span>
+                  </div>
+                )}
                 <label className="flex items-center gap-1.5 cursor-pointer text-xs text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 bg-stone-100 dark:bg-stone-800 px-2.5 py-1 rounded-md">
                   <input
                     type="checkbox"
@@ -1191,7 +1289,7 @@ export default function CustomerStudio({
 
           {/* Canvas Viewport Area */}
           <div
-            className="flex-1 flex items-center justify-center p-2 sm:p-5 overflow-hidden relative canvas-dots min-h-[320px] sm:min-h-[420px]"
+            className={`flex-1 flex items-center justify-center ${imageDimensions.isPortrait ? 'p-1.5 sm:p-3' : 'p-2 sm:p-5'} overflow-auto relative canvas-dots min-h-[320px] sm:min-h-[420px]`}
             onClick={handleStageClick}
           >
             {/* Clean Initial Dropzone (When no room is loaded) */}
@@ -1298,12 +1396,34 @@ export default function CustomerStudio({
             ) : (
               <div
                 ref={stageWrapperRef}
-                className="relative inline-block rounded-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800 max-w-full max-h-full bg-white dark:bg-slate-900 select-none"
+                className={`relative inline-block rounded-2xl overflow-hidden shadow-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 select-none transition-all duration-300 ${
+                  viewScaleMode === 'native'
+                    ? 'max-w-none max-h-none'
+                    : imageDimensions.isPortrait
+                      ? 'max-h-[calc(100vh-140px)]'
+                      : 'max-w-full max-h-full'
+                }`}
+                style={{
+                  aspectRatio: imageDimensions.width && imageDimensions.height 
+                    ? `${imageDimensions.width} / ${imageDimensions.height}` 
+                    : undefined
+                }}
               >
                 {/* Active Room Canvas */}
                 <canvas
                   ref={roomCanvasRef}
-                  className="block max-w-full max-h-[46vh] sm:max-h-[56vh] lg:max-h-[72vh] w-auto h-auto object-contain"
+                  className={`block transition-all duration-200 ${
+                    viewScaleMode === 'native'
+                      ? 'max-w-none max-h-none'
+                      : imageDimensions.isPortrait
+                        ? 'max-h-[58vh] sm:max-h-[68vh] lg:max-h-[calc(100vh-160px)] w-auto h-auto max-w-full object-contain'
+                        : 'max-h-[46vh] sm:max-h-[58vh] lg:max-h-[76vh] w-auto h-auto max-w-full object-contain'
+                  }`}
+                  style={
+                    viewScaleMode === 'native' && imageDimensions.width
+                      ? { width: `${imageDimensions.width}px`, height: `${imageDimensions.height}px` }
+                      : undefined
+                  }
                 />
 
                 {/* Before Overlay for Split Comparison */}
@@ -1315,10 +1435,7 @@ export default function CustomerStudio({
                 >
                   <canvas
                     ref={beforeCanvasRef}
-                    className="block max-w-none h-full object-cover"
-                    style={{
-                      width: roomCanvasRef.current ? `${roomCanvasRef.current.clientWidth}px` : '100%'
-                    }}
+                    className="block w-full h-full object-contain"
                   />
                   <div className="absolute top-3 left-3 bg-stone-950/85 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-md">
                     BEFORE (ORIGINAL)
@@ -1388,12 +1505,14 @@ export default function CustomerStudio({
                 </div>
 
                 {/* Floating Canvas Quick Controls Bar (Mobile & Desktop) */}
-                <div className="absolute bottom-3 inset-x-3 z-30 flex items-center justify-between pointer-events-none">
+                <div className={`absolute bottom-3 inset-x-2 sm:inset-x-3 z-30 flex items-center justify-between pointer-events-none gap-1.5 ${
+                  imageDimensions.isPortrait ? 'flex-wrap sm:flex-nowrap' : ''
+                }`}>
                   {/* Left: Tag Spot & Expand Pill */}
-                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-stone-900/90 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
+                  <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
                     <button
                       onClick={() => setAddPinMode(!addPinMode)}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-colors ${
                         addPinMode
                           ? 'bg-brand-500 text-white shadow-md'
                           : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
@@ -1401,24 +1520,38 @@ export default function CustomerStudio({
                       title="Click anywhere on canvas to tag a new furniture spot"
                     >
                       <Tag size={13} />
-                      <span className="hidden xs:inline">{addPinMode ? 'Click Room' : '+ Tag'}</span>
+                      <span className="text-[11px] sm:text-xs">{addPinMode ? 'Click Room' : '+ Tag'}</span>
                     </button>
 
                     <button
                       onClick={runAIOutpaint}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors"
+                      className="px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors"
                       title="Expand room walls and flooring with AI Outpainting"
                     >
                       <Maximize2 size={13} className="text-brand-500" />
-                      <span className="hidden sm:inline">AI Expand</span>
+                      <span className="text-[11px] sm:text-xs">Expand</span>
                     </button>
                   </div>
 
-                  {/* Right: Compare & Hold Pill */}
-                  <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 dark:bg-stone-900/90 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
+                  {/* Right: Compare & Hold Pill + View Mode Toggle */}
+                  <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
+                    {/* View Scale Toggle (Fit vs 1:1 Actual Resolution) */}
+                    <button
+                      onClick={() => setViewScaleMode(prev => prev === 'fit' ? 'native' : 'fit')}
+                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors ${
+                        viewScaleMode === 'native'
+                          ? 'bg-brand-500 text-white shadow-sm'
+                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
+                      }`}
+                      title={viewScaleMode === 'native' ? 'Switch to Adaptive Fit' : 'View in 100% Native Resolution'}
+                    >
+                      <ZoomIn size={13} />
+                      <span className="hidden xs:inline">{viewScaleMode === 'native' ? '1:1 Native' : 'Fit'}</span>
+                    </button>
+
                     <button
                       onClick={() => setIsBeforeAfterOpen(!isBeforeAfterOpen)}
-                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
+                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
                         isBeforeAfterOpen
                           ? 'bg-brand-500 text-white shadow-sm'
                           : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
@@ -1435,11 +1568,11 @@ export default function CustomerStudio({
                       onMouseLeave={() => setIsPeekingOriginal(false)}
                       onTouchStart={() => setIsPeekingOriginal(true)}
                       onTouchEnd={() => setIsPeekingOriginal(false)}
-                      className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors select-none"
+                      className="px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors select-none"
                       title="Hold to peek at original v1 room"
                     >
                       <Eye size={13} className="text-emerald-500" />
-                      <span>Hold v1</span>
+                      <span>v1</span>
                     </button>
                   </div>
                 </div>
@@ -1490,7 +1623,7 @@ export default function CustomerStudio({
         {/* ---------------------------------------------------------------------
             COLUMN 2: ARCHITECTURAL REPLACEMENT PANEL (Mobile Drawer & Desktop Sidebar)
             --------------------------------------------------------------------- */}
-        <aside className="w-full lg:w-[420px] xl:w-[460px] bg-white dark:bg-slate-900 border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 flex flex-col justify-between overflow-y-auto shrink-0 shadow-lg lg:shadow-none">
+        <aside className={`w-full ${imageDimensions.isPortrait ? 'lg:w-[440px] xl:w-[480px]' : 'lg:w-[420px] xl:w-[460px]'} bg-white dark:bg-stone-900 border-t lg:border-t-0 lg:border-l border-stone-200 dark:border-stone-800 flex flex-col justify-between overflow-y-auto shrink-0 shadow-lg lg:shadow-none transition-all duration-300`}>
           
           <div className="p-4 sm:p-5 space-y-4">
 
