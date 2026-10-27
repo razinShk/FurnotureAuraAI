@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <rect width="120" height="120" rx="28" fill="#1A1714"/>
+  <!-- Outer Gold Viewfinder ("Peek") Brackets -->
+  <path d="M22 44V26C22 23.7909 23.7909 22 26 22H44" stroke="#C5A059" stroke-width="5" stroke-linecap="round"/>
+  <path d="M76 22H94C96.2091 22 98 23.7909 98 26V44" stroke="#C5A059" stroke-width="5" stroke-linecap="round"/>
+  <path d="M22 76V94C22 96.2091 23.7909 98 26 98H44" stroke="#C5A059" stroke-width="5" stroke-linecap="round"/>
+  <path d="M98 76V94C98 96.2091 96.2091 98 94 98H76" stroke="#C5A059" stroke-width="5" stroke-linecap="round"/>
+  <!-- Inner Alabaster Accents -->
+  <path d="M31 44V33H42" stroke="#F5F2EC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <path d="M78 33H89V44" stroke="#F5F2EC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- Designer Lounge Chair Silhouette ("Furni") -->
+  <path d="M38 56C38 43 52 38 66 42C80 46 86 56 82 67C79 75 68 78 54 77C43 76 38 67 38 56Z" stroke="#C5A059" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M48 63C55 61 68 61 74 65" stroke="#F5F2EC" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M45 74L39 85M75 74L80 85M41 83C52 78 68 78 79 83" stroke="#C5A059" stroke-width="4" stroke-linecap="round"/>
+</svg>

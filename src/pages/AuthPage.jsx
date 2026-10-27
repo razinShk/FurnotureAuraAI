@@ -118,15 +118,17 @@ export default function AuthPage({
             className="flex items-center gap-3 group text-left"
             title="Return to Home"
           >
-            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-base flex items-center justify-center shadow-lg shadow-[#c59b63]/20 group-hover:scale-105 transition-transform">
-              FA
-            </span>
+            <img
+              src="/furnipeek-logo.jpg"
+              alt="FurniPeek Logo"
+              className="w-10 h-10 rounded-xl object-cover shadow-lg shadow-[#c59b63]/20 border border-[#c59b63]/40 group-hover:scale-105 transition-transform"
+            />
             <div>
               <div className="font-serif font-bold tracking-tight text-xl text-white">
-                FurnitureAura<span className="text-[#c59b63] font-sans ml-1 text-xs font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#c59b63]/15 border border-[#c59b63]/30">AI</span>
+                Furni<span className="text-[#c59b63]">Peek</span><span className="text-[#c59b63] font-sans ml-1 text-xs font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-[#c59b63]/15 border border-[#c59b63]/30">AI</span>
               </div>
               <div className="text-[10px] tracking-widest uppercase text-stone-400 font-bold">
-                Haute Spatial Architecture
+                AI Furniture Preview & Flat Redesign
               </div>
             </div>
           </button>
@@ -172,7 +174,7 @@ export default function AuthPage({
         {/* Bottom Editorial Testimonial */}
         <div className="relative z-10 pt-6 border-t border-stone-800/60">
           <p className="text-xs italic text-stone-400 font-serif leading-relaxed">
-            “FurnitureAura transforms empty architectural voids into bespoke showroom environments before our first physical consultation.”
+            “FurniPeek transforms empty architectural voids into bespoke showroom environments before our first physical consultation.”
           </p>
           <div className="text-[11px] text-stone-500 font-sans mt-1.5 font-medium">
             — Studio Atelier, Milan Architectural Showcase
@@ -213,11 +215,13 @@ export default function AuthPage({
           {/* Mobile Logo (Shown only on small viewports where left column is hidden) */}
           <div className="lg:hidden text-center mb-6">
             <div className="inline-flex items-center gap-2.5 mb-2">
-              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-sm flex items-center justify-center shadow-md">
-                FA
-              </span>
+              <img
+                src="/furnipeek-logo.jpg"
+                alt="FurniPeek Logo"
+                className="w-9 h-9 rounded-xl object-cover shadow-md border border-[#c59b63]/40"
+              />
               <span className="font-serif font-bold tracking-tight text-lg text-stone-900 dark:text-stone-100">
-                FurnitureAura<span className="text-[#c59b63] font-sans ml-0.5 text-xs font-extrabold uppercase">AI</span>
+                Furni<span className="text-[#c59b63]">Peek</span><span className="text-[#c59b63] font-sans ml-0.5 text-xs font-extrabold uppercase">AI</span>
               </span>
             </div>
           </div>

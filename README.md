@@ -1,12 +1,12 @@
-# FurnitureAura AI — Spatial Interior & Furniture Architecture Platform
+# FurniPeek — AI Furniture Preview & Flat Redesign Studio
 
-> **100% Pure Supabase Production Architecture.** A spatial interior staging platform powered by **Black Forest Labs Flux-2 Klein 4B**, **Google Gemini 2.5 Flash**, **Supabase Edge Functions**, and **Clerk Authentication**.
+> **100% Pure Supabase Production Architecture.** A spatial interior staging platform powered by **Google Nano Banana Pro**, **Google Gemini 2.5 Flash**, **Supabase Edge Functions**, and **Clerk Authentication**.
 
 ---
 
 ## 🏛️ Architectural Overview
 
-FurnitureAura AI operates as a serverless Single-Page Application (SPA) powered entirely by **Supabase Backend-as-a-Service (BaaS)** and **Vite React**:
+FurniPeek operates as a serverless Single-Page Application (SPA) powered entirely by **Supabase Backend-as-a-Service (BaaS)** and **Vite React**:
 
 ```
 ┌────────────────────────────────────────────────────────┐

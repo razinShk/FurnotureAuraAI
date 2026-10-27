@@ -176,7 +176,7 @@ export default function LandingPage({ onNavigate, onSelectCatalogItem }) {
             State-Of-The-Art Spatial Architecture
           </h2>
           <h3 className="text-3xl sm:text-4xl font-serif font-bold text-stone-900 dark:text-stone-100">
-            How FurnitureAura AI Delivers 100% Real Staging
+            How FurniPeek Delivers 100% Real Staging
           </h3>
           <p className="text-sm text-stone-500 dark:text-stone-400">
             Unlike generic AI image generators, we bind real physical furniture SKUs, store pricing, and architectural coordinates.
@@ -443,11 +443,13 @@ export default function LandingPage({ onNavigate, onSelectCatalogItem }) {
       <footer className="mt-auto border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-4 sm:px-6 lg:px-8 py-10 max-w-7xl mx-auto w-full transition-colors">
         <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-stone-500 dark:text-stone-400">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c59b63] to-[#8c6735] flex items-center justify-center text-white font-serif font-bold text-xs shadow-sm">
-              FA
-            </div>
-            <span className="font-serif font-bold text-stone-900 dark:text-stone-100 text-base">FurnitureAura AI</span>
-            <span>— Spatial Interior & Furniture Studio</span>
+            <img
+              src="/furnipeek-logo.jpg"
+              alt="FurniPeek Logo"
+              className="w-8 h-8 rounded-lg object-cover shadow-sm border border-[#c59b63]/40"
+            />
+            <span className="font-serif font-bold text-stone-900 dark:text-stone-100 text-base">Furni<span className="text-[#c59b63]">Peek</span></span>
+            <span>— AI Furniture Preview & Flat Redesign Studio</span>
           </div>
 
           <div className="flex items-center gap-6 flex-wrap">
@@ -459,7 +461,7 @@ export default function LandingPage({ onNavigate, onSelectCatalogItem }) {
           </div>
 
           <div>
-            © 2026 FurnitureAura AI Inc. All rights reserved.
+            © 2026 FurniPeek Inc. All rights reserved.
           </div>
         </div>
       </footer>

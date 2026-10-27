@@ -224,14 +224,16 @@ export default function App() {
         <button
           onClick={() => navigateTo('landing')}
           className={`flex items-center gap-3 h-16 ${isStudio ? 'justify-center' : 'px-5'}`}
-          aria-label="FurnitureAura home"
+          aria-label="FurniPeek home"
         >
-          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-sm flex items-center justify-center shrink-0 shadow-sm">
-            FA
-          </span>
+          <img
+            src="/furnipeek-logo.jpg"
+            alt="FurniPeek Logo"
+            className="w-9 h-9 rounded-xl object-cover shrink-0 shadow-sm border border-[#c59b63]/40"
+          />
           {!isStudio && (
             <span className="font-serif font-bold tracking-tight text-[17px] text-stone-900 dark:text-stone-100">
-              FurnitureAura<span className="text-brand-500 font-sans ml-0.5 text-xs font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-50 dark:bg-brand-950/50 border border-brand-200/60 dark:border-brand-500/30">AI</span>
+              Furni<span className="text-[#c59b63]">Peek</span><span className="text-brand-500 font-sans ml-1 text-xs font-extrabold uppercase tracking-widest px-1.5 py-0.5 rounded bg-brand-50 dark:bg-brand-950/50 border border-brand-200/60 dark:border-brand-500/30">AI</span>
             </span>
           )}
         </button>
@@ -348,12 +350,14 @@ export default function App() {
         {!isStudio && (
           <header className="lg:hidden sticky top-0 z-40 safe-top bg-white/95 dark:bg-stone-950/95 backdrop-blur-xl border-b border-stone-200/80 dark:border-stone-800">
             <div className="h-14 px-4 flex items-center justify-between">
-              <button onClick={() => navigateTo('landing')} className="flex items-center gap-2.5" aria-label="Home">
-                <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm">
-                  FA
-                </span>
+              <button onClick={() => navigateTo('landing')} className="flex items-center gap-2.5" aria-label="FurniPeek Home">
+                <img
+                  src="/furnipeek-logo.jpg"
+                  alt="FurniPeek Logo"
+                  className="w-8 h-8 rounded-lg object-cover shadow-sm border border-[#c59b63]/40"
+                />
                 <span className="font-serif font-bold tracking-tight text-base text-stone-900 dark:text-stone-100">
-                  FurnitureAura<span className="text-brand-500 font-sans ml-1 text-[11px] font-bold uppercase tracking-wider">AI</span>
+                  Furni<span className="text-[#c59b63]">Peek</span><span className="text-brand-500 font-sans ml-1 text-[11px] font-bold uppercase tracking-wider">AI</span>
                 </span>
               </button>
 

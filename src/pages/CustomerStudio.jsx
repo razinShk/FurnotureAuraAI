@@ -1117,7 +1117,7 @@ export default function CustomerStudio({
     if (!canvas) return;
     const link = document.createElement('a');
     const dimSuffix = imageDimensions.width && imageDimensions.height ? `-${imageDimensions.width}x${imageDimensions.height}` : '';
-    link.download = `FurnitureAura-Design-v${activeVersionIndex + 1}${dimSuffix}.png`;
+    link.download = `FurniPeek-Design-v${activeVersionIndex + 1}${dimSuffix}.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
   };
@@ -1218,12 +1218,14 @@ export default function CustomerStudio({
           </button>
 
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full sm:rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
-              FA
-            </span>
+            <img
+              src="/furnipeek-logo.jpg"
+              alt="FurniPeek Logo"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full sm:rounded-xl object-cover shadow-sm shrink-0 border border-[#c59b63]/40"
+            />
             <div className="min-w-0">
               <div className="text-sm sm:text-xs font-serif font-bold text-stone-900 dark:text-stone-100 leading-tight flex items-center gap-1.5 truncate">
-                <span className="truncate">FurnitureAura Studio</span>
+                <span className="truncate">Furni<span className="text-[#c59b63]">Peek</span> Studio</span>
                 <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded-md bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-sans font-bold border border-brand-200 dark:border-brand-500/30">
                   PRO
                 </span>
@@ -3305,7 +3307,7 @@ export default function CustomerStudio({
                         onClick={(e) => {
                           e.stopPropagation();
                           const link = document.createElement('a');
-                          link.download = `${creation.title || 'FurnitureAura-Design'}.png`;
+                          link.download = `${creation.title || 'FurniPeek-Design'}.png`;
                           link.href = creation.thumbnail;
                           link.click();
                         }}
