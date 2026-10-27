@@ -213,7 +213,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 lg:flex">
+    <div className={`${isStudio ? 'h-[100dvh] overflow-hidden flex flex-col lg:flex-row' : 'min-h-[100dvh] lg:flex'} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100`}>
       
       {/* ---------- Desktop sidebar ---------- */}
       <aside
@@ -343,7 +343,7 @@ export default function App() {
       </aside>
 
       {/* ---------- Main column ---------- */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${isStudio ? 'overflow-hidden' : ''}`}>
         {/* Mobile top bar */}
         {!isStudio && (
           <header className="lg:hidden sticky top-0 z-40 safe-top bg-white/95 dark:bg-stone-950/95 backdrop-blur-xl border-b border-stone-200/80 dark:border-stone-800">
@@ -390,7 +390,7 @@ export default function App() {
           </header>
         )}
 
-        <main className={`flex-1 flex flex-col ${isStudio ? '' : 'pb-tabbar'}`}>
+        <main className={`flex-1 min-h-0 flex flex-col ${isStudio ? 'overflow-hidden' : 'pb-tabbar'}`}>
           {currentPage === 'landing' && <LandingPage onNavigate={navigateTo} onSelectCatalogItem={openStudioWith} />}
 
           {currentPage === 'studio' && (

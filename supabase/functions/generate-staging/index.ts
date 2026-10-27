@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-replicate-key",
 };
 
-function buildStagingPrompt({ pinInfo, allPins = [], prompt, referenceDescription, activeOption, hasReferenceImage }: any) {
+function buildStagingPrompt({ pinInfo, allPins = [], prompt, referenceDescription, activeOption, hasReferenceImage, targetAspectRatio = "3:2" }: any) {
   const pinName = pinInfo?.name || "furniture piece";
   const category = (pinInfo?.category || "sofa").toLowerCase();
   const x = Number(pinInfo?.x || 50);
@@ -51,7 +51,8 @@ NEW FURNITURE SPECIFICATION (FROM IMAGE 2):
 - Detailed reference specification: ${refSpec}.
 ${cushionDirective}- MATERIAL & COLOR FIDELITY: Replicate the exact upholstery material (fabric weave, velvet, leather, or bouclé), color hue, texture, stitching details, armrest shape, and base legs shown in Image 2.
 
-PRESERVATION OF EXISTING ROOM:
+PRESERVATION OF EXISTING ROOM & FLAT ASPECT RATIO:
+- Strictly preserve Image 1's (the flat/room photo's) exact camera framing, orientation, and ${targetAspectRatio} aspect ratio. Do NOT adopt the aspect ratio, cropping, or resolution of Image 2 (the furniture reference photo).
 - Preserve all existing non-target furniture in Image 1 in their original state.
 - Specifically: ${chairProtectionText}.
 - Preserve the center coffee table, patterned floor rug, credenza/sideboard, framed wall photos, indoor plants, windows, walls, and flooring exactly as shown in Image 1.
@@ -67,7 +68,8 @@ TARGET OBJECT TO REPLACE:
 - In Image 1, replace ONLY the ${pinName} ${positionDesc}.
 - Replace with: ${prompt}.
 
-PRESERVATION OF EXISTING ROOM:
+PRESERVATION OF EXISTING ROOM & FLAT ASPECT RATIO:
+- Strictly preserve Image 1's (the flat/room photo's) exact camera framing, orientation, and ${targetAspectRatio} aspect ratio.
 - Preserve all existing non-target furniture in Image 1 in their original state.
 - Specifically: ${chairProtectionText}.
 - The center coffee table, rug, credenza/sideboard, gallery wall, plants, and windows must remain completely preserved.
@@ -94,6 +96,10 @@ serve(async (req) => {
       allPins = [],
       referenceDescription = "",
       activeOption = "B",
+      aspectRatio,
+      resolution,
+      roomWidth,
+      roomHeight,
     } = await req.json();
 
     if (!prompt) {
@@ -139,6 +145,20 @@ serve(async (req) => {
       images.push(catalogImageUrl);
     }
 
+    // Determine exact Nano Banana Pro aspect_ratio strictly from the flat/room image ("1:1", "2:3", or "3:2")
+    // Never use "match_input_image" when multiple images are passed, as Image 2 (furniture ref) can override Image 1 (flat)
+    const allowedRatios = ["1:1", "2:3", "3:2"];
+    let targetAspectRatio = "3:2";
+    if (aspectRatio && allowedRatios.includes(aspectRatio)) {
+      targetAspectRatio = aspectRatio;
+    } else if (roomWidth && roomHeight) {
+      const ratio = Number(roomWidth) / (Number(roomHeight) || 1);
+      targetAspectRatio = ratio > 1.18 ? "3:2" : ratio < 0.85 ? "2:3" : "1:1";
+    }
+
+    // Use "1K" resolution by default for fast generation speed and free-plan efficiency
+    const targetResolution = resolution === "2K" || resolution === "4K" ? resolution : "1K";
+
     const stagingPrompt = buildStagingPrompt({
       pinInfo,
       allPins,
@@ -146,13 +166,14 @@ serve(async (req) => {
       referenceDescription,
       activeOption,
       hasReferenceImage: hasReference,
+      targetAspectRatio,
     });
 
     const inputPayload = {
       prompt: stagingPrompt,
       image_input: images,
-      aspect_ratio: "match_input_image",
-      resolution: "2K",
+      aspect_ratio: targetAspectRatio,
+      resolution: targetResolution,
       output_format: "jpg",
       safety_filter_level: "block_only_high",
       allow_fallback_model: true,

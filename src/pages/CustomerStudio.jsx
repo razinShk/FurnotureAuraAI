@@ -31,7 +31,9 @@ import {
   Edit2,
   Edit3,
   FolderHeart,
-  ZoomIn
+  ZoomIn,
+  Crosshair,
+  MoreHorizontal
 } from 'lucide-react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import RoomQuoteModal from '../components/RoomQuoteModal';
@@ -74,6 +76,17 @@ const DEMO_ROOMS = [
   }
 ];
 
+const FLAT_STYLE_TEMPLATES = [
+  { id: 'Japandi Zen', label: 'Japandi', desc: 'Warm oak, low linen seating & wabi-sabi calm', swatch: '#c9b18c' },
+  { id: 'Quiet Luxury', label: 'Luxury', desc: 'Curved bouclé, travertine stone & brushed brass', swatch: '#c59b63' },
+  { id: 'Modern Minimalist', label: 'Minimalist', desc: 'Clean architectural lines & warm stone tones', swatch: '#948e85' },
+  { id: 'Contemporary Loft', label: 'Modern', desc: 'Cognac leather, walnut wood & matte black steel', swatch: '#8b5a2b' },
+  { id: 'Scandinavian Airy', label: 'Scandinavian', desc: 'Light Nordic birch, soft wool & sunlit neutrals', swatch: '#dfd7ca' },
+  { id: 'Parisian Classic', label: 'Parisian', desc: 'Herringbone parquet, velvet & timeless molding', swatch: '#7c6f64' },
+  { id: 'Mediterranean Warm', label: 'Mediterranean', desc: 'Limewash plaster, terracotta & organic linen', swatch: '#b87a56' },
+  { id: 'Mid-Century Modern', label: 'Mid-Century', desc: 'Sculpted teak wood, iconic curves & amber glow', swatch: '#a66b38' }
+];
+
 export default function CustomerStudio({ 
   currentUser, 
   onDeductCredits, 
@@ -88,12 +101,16 @@ export default function CustomerStudio({
   const beforeCanvasRef = useRef(null);
   const stageWrapperRef = useRef(null);
   const pinsContainerRef = useRef(null);
+  const canvasViewportRef = useRef(null);
+  const [stageBounds, setStageBounds] = useState({ width: 0, height: 0 });
 
   // Modals state
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [isQuoteOpen, setIsQuoteOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentCreationsOpen, setIsRecentCreationsOpen] = useState(false);
+  const [isMobileHeaderMenuOpen, setIsMobileHeaderMenuOpen] = useState(false);
+  const [isCanvasMoreOpen, setIsCanvasMoreOpen] = useState(false);
 
   // Room Image & Pin State
   const [currentRoomUrl, setCurrentRoomUrl] = useState(null);
@@ -115,6 +132,8 @@ export default function CustomerStudio({
 
   // Staging Replacement Modes (C: Reference Photo, A: Store Catalog, B: Custom Prompt)
   const [activeOption, setActiveOption] = useState(() => initialCatalogItem ? 'A' : 'C'); // 'C' | 'A' | 'B'
+  // Mobile 4-Tab Footer Drawer state ('spot' | 'C' | 'A' | 'B')
+  const [mobileFooterTab, setMobileFooterTab] = useState(() => initialCatalogItem ? 'A' : 'C');
   const [catalogItems, setCatalogItems] = useState([]);
   const [activeCatalogCategory, setActiveCatalogCategory] = useState('all');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState(null);
@@ -125,6 +144,16 @@ export default function CustomerStudio({
   const [referenceDescription, setReferenceDescription] = useState('');
   const [enableCushionSpec, setEnableCushionSpec] = useState(false);
   const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
+  const [refCloningMode, setRefCloningMode] = useState('exact'); // 'exact' | 'adaptive'
+
+  // AI Prompt Sub-Modes: 'furniture' (Single Spot) | 'full_flat' (Entire Flat Redesign)
+  const [aiPromptSubMode, setAiPromptSubMode] = useState('furniture');
+  const [flatState, setFlatState] = useState('empty'); // 'empty' | 'furnished'
+  const [flatRoomType, setFlatRoomType] = useState('Living Room');
+  const [flatStyle, setFlatStyle] = useState('Japandi Zen');
+  const [flatDensity, setFlatDensity] = useState('Balanced Living');
+  const [flatLighting, setFlatLighting] = useState('Sunlit Warm Ivory');
+  const [flatCustomNotes, setFlatCustomNotes] = useState('');
 
   // AI Loading & Scanning
   const [isAILoading, setIsAILoading] = useState(false);
@@ -224,6 +253,7 @@ export default function CustomerStudio({
       setCurrentRoomTotal(savedSession.currentRoomTotal || 0);
       setStagedStoreItems(savedSession.stagedStoreItems || []);
       setActiveOption(savedSession.activeOption || 'C');
+      setMobileFooterTab(savedSession.activeOption || 'C');
       setCustomPromptText(savedSession.customPromptText || '');
 
       if (savedSession.versionHistory && savedSession.versionHistory.length > 0) {
@@ -592,6 +622,39 @@ export default function CustomerStudio({
   // =========================================================================
   // 6. EXECUTE AI STAGING (Strict Auth & 2-Credit Enforcement + Recent Creations Save)
   // =========================================================================
+  // Normalize any secondary reference/catalog image onto a canvas matching the flat's aspect ratio (1:1, 2:3, or 3:2)
+  // so that Image 2 can never cause the AI model to shift away from the flat image's resolution/aspect ratio.
+  const normalizeImageToFlatAspect = (imgSrc, targetRatioStr) => {
+    return new Promise((resolve) => {
+      if (!imgSrc) return resolve(null);
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const outW = targetRatioStr === '3:2' ? 1024 : targetRatioStr === '2:3' ? 683 : 1024;
+          const outH = targetRatioStr === '3:2' ? 683 : targetRatioStr === '2:3' ? 1024 : 1024;
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = outW;
+          offCanvas.height = outH;
+          const oCtx = offCanvas.getContext('2d');
+          oCtx.fillStyle = '#F5F2EC';
+          oCtx.fillRect(0, 0, outW, outH);
+          const scale = Math.min(outW / (img.width || 1), outH / (img.height || 1));
+          const drawW = Math.round(img.width * scale);
+          const drawH = Math.round(img.height * scale);
+          const dx = Math.round((outW - drawW) / 2);
+          const dy = Math.round((outH - drawH) / 2);
+          oCtx.drawImage(img, dx, dy, drawW, drawH);
+          resolve(offCanvas.toDataURL('image/jpeg', 0.88));
+        } catch {
+          resolve(imgSrc);
+        }
+      };
+      img.onerror = () => resolve(imgSrc);
+      img.src = imgSrc;
+    });
+  };
+
   const executeAIStaging = async () => {
     // 1. AUTHENTICATION ENFORCEMENT
     if (!currentUser) {
@@ -608,21 +671,36 @@ export default function CustomerStudio({
       return;
     }
 
-    const pin = componentPins.find(p => p.id === selectedPinId);
+    const isFullFlatMode = activeOption === 'B' && aiPromptSubMode === 'full_flat';
+    const selectedStyleObj = FLAT_STYLE_TEMPLATES.find(s => s.id === flatStyle) || FLAT_STYLE_TEMPLATES[0];
+    const composedFlatPrompt = `${flatState === 'empty' ? 'Furnish this empty flat shell from scratch' : 'Completely redesign and replace all existing furniture in this flat'} as a ${flatStyle} ${flatRoomType} (${selectedStyleObj.desc}). Furniture density: ${flatDensity}. Lighting & color palette: ${flatLighting}.${flatCustomNotes.trim() ? ` Additional notes: ${flatCustomNotes.trim()}.` : ''} Preserve the exact architectural walls, windows, floor geometry, and camera perspective.`;
+
+    const pin = isFullFlatMode
+      ? {
+          id: 'full-flat-redesign',
+          name: `${selectedStyleObj.label} ${flatRoomType}`,
+          category: 'complete room interior',
+          x: 50,
+          y: 55,
+          boxW: 92,
+          boxH: 85
+        }
+      : (componentPins.find(p => p.id === selectedPinId) || componentPins[0]);
+
     if (!pin) {
       setStatusBanner('⚠️ Please select a room spot first or click "+ Tag Spot".');
       toast.info('Please select a room spot first or click "+ Tag Spot".');
       return;
     }
 
-    if (activeOption === 'B' && !customPromptText.trim()) {
-      setStatusBanner('⚠️ Please type a furniture description for Option B first.');
-      toast.info('Please type a furniture description first.');
+    if (activeOption === 'B' && aiPromptSubMode === 'furniture' && !customPromptText.trim()) {
+      setStatusBanner('⚠️ Please type or select a furniture style prompt first.');
+      toast.info('Please type or select a furniture style prompt first.');
       return;
     }
     if (activeOption === 'C' && !uploadedReferenceBase64) {
-      setStatusBanner('⚠️ Please upload a reference furniture or tile image for Option C first.');
-      toast.info('Please upload a reference furniture image first.');
+      setStatusBanner('⚠️ Please upload or snap a reference furniture photo first.');
+      toast.info('Please upload or snap a reference furniture photo first.');
       return;
     }
 
@@ -639,11 +717,14 @@ export default function CustomerStudio({
       stagingCostAddition = selectedCatalogItem.price || 0;
       stagedItemForCart = selectedCatalogItem;
     } else if (activeOption === 'B') {
-      itemDescription = customPromptText.trim();
+      itemDescription = isFullFlatMode ? composedFlatPrompt : customPromptText.trim();
     } else {
-      itemDescription = (enableCushionSpec && referenceDescription.trim())
+      const baseRefDesc = (enableCushionSpec && referenceDescription.trim())
         ? referenceDescription.trim()
         : 'the exact architectural furniture shown in the attached reference photo';
+      itemDescription = refCloningMode === 'adaptive'
+        ? `${baseRefDesc} (Adapt material tone, ambient shadows, and perspective to blend naturally with the room)`
+        : `${baseRefDesc} (Exact 1:1 silhouette, cushion geometry, and upholstery clone)`;
     }
 
     showLoading(
@@ -653,22 +734,38 @@ export default function CustomerStudio({
 
     try {
       const canvas = roomCanvasRef.current;
+      const flatW = canvas.width || imageDimensions.width || 1200;
+      const flatH = canvas.height || imageDimensions.height || 800;
+      const flatRatio = flatW / (flatH || 1);
+      // Strictly map the flat image's own aspect ratio to Nano Banana Pro's 3 ratios: 1:1, 2:3, or 3:2
+      const flatAspectRatio = flatRatio > 1.18 ? '3:2' : flatRatio < 0.85 ? '2:3' : '1:1';
+      // Use '1K' resolution for fastest generation speed and optimal free-plan efficiency
+      const fastResolution = '1K';
+
       const roomBase64 = canvas.toDataURL('image/jpeg', 0.88);
 
       let catalogImageUrl = null;
       if (activeOption === 'A' && selectedCatalogItem) {
-        catalogImageUrl = selectedCatalogItem.imageUrl;
+        catalogImageUrl = await normalizeImageToFlatAspect(selectedCatalogItem.imageUrl, flatAspectRatio);
       }
+
+      const normalizedRefImage = activeOption === 'C' && uploadedReferenceBase64
+        ? await normalizeImageToFlatAspect(uploadedReferenceBase64, flatAspectRatio)
+        : null;
 
       const data = await generateStagedRoom({
         prompt: itemDescription,
         roomImage: roomBase64,
-        referenceImage: activeOption === 'C' ? uploadedReferenceBase64 : null,
+        referenceImage: normalizedRefImage,
         referenceDescription: enableCushionSpec ? referenceDescription.trim() : '',
         catalogImageUrl: catalogImageUrl,
         pinInfo: pin,
         allPins: componentPins,
         activeOption: activeOption,
+        aspectRatio: flatAspectRatio,
+        resolution: fastResolution,
+        roomWidth: flatW,
+        roomHeight: flatH,
         userId: currentUser.id,
         storeId: selectedCatalogItem?.storeId || 'store-1',
         furnitureId: selectedCatalogItem?.id
@@ -699,37 +796,35 @@ export default function CustomerStudio({
           genImg.crossOrigin = 'anonymous';
         }
         genImg.onload = async () => {
-          const genW = genImg.naturalWidth || genImg.width;
-          const genH = genImg.naturalHeight || genImg.height;
-
-          // Directly adopt the EXACT format, height, and width output by the AI
-          canvas.width = genW;
-          canvas.height = genH;
+          // Strictly preserve the uploaded flat image's exact resolution (flatW x flatH)
+          // so the room never shifts between landscape/portrait or changes dimensions
+          canvas.width = flatW;
+          canvas.height = flatH;
           const ctx = canvas.getContext('2d');
-          ctx.clearRect(0, 0, genW, genH);
-          ctx.drawImage(genImg, 0, 0, genW, genH);
+          ctx.clearRect(0, 0, flatW, flatH);
+          ctx.drawImage(genImg, 0, 0, flatW, flatH);
 
-          // Update beforeCanvas to match dimensions for seamless split comparison
+          // Keep beforeCanvas locked to the exact same flat dimensions for split comparison
           const beforeCanvas = beforeCanvasRef.current;
           if (beforeCanvas) {
-            beforeCanvas.width = genW;
-            beforeCanvas.height = genH;
+            beforeCanvas.width = flatW;
+            beforeCanvas.height = flatH;
             const bCtx = beforeCanvas.getContext('2d');
-            bCtx.clearRect(0, 0, genW, genH);
+            bCtx.clearRect(0, 0, flatW, flatH);
             const v1Url = versionHistory?.[0]?.dataUrl;
             if (v1Url) {
               const bImg = new Image();
-              bImg.onload = () => bCtx.drawImage(bImg, 0, 0, genW, genH);
+              bImg.onload = () => bCtx.drawImage(bImg, 0, 0, flatW, flatH);
               bImg.src = v1Url;
             }
           }
 
-          // Track orientation & dimensions so surroundings dynamically adjust
+          // Keep imageDimensions locked to the flat's resolution and aspect ratio
           setImageDimensions({
-            width: genW,
-            height: genH,
-            isPortrait: genH > genW,
-            aspectRatio: genW / (genH || 1)
+            width: flatW,
+            height: flatH,
+            isPortrait: flatH > flatW,
+            aspectRatio: flatW / (flatH || 1)
           });
           setCurrentRoomUrl(data.imageUrl);
 
@@ -1002,6 +1097,7 @@ export default function CustomerStudio({
     setComponentPins(prev => [...prev, newPin]);
     setSelectedPinId(newPin.id);
     setIsEditingPinName(true);
+    setMobileFooterTab('spot');
     setAddPinMode(false);
     setStatusBanner(`🎯 Added "${newPin.name}". Click to edit name or adjust bounding box!`);
   };
@@ -1036,54 +1132,120 @@ export default function CustomerStudio({
   const creditsCount = currentUser?.credits ?? 0;
   const hasCredits = creditsCount >= 2;
 
+  // Measure actual canvas viewport stage bounds across all mobile & desktop screen sizes
+  useEffect(() => {
+    const el = canvasViewportRef.current;
+    if (!el) return;
+    const updateBounds = () => {
+      if (canvasViewportRef.current) {
+        setStageBounds({
+          width: canvasViewportRef.current.clientWidth,
+          height: canvasViewportRef.current.clientHeight
+        });
+      }
+    };
+    updateBounds();
+    let ro;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(updateBounds);
+      ro.observe(el);
+    }
+    window.addEventListener('resize', updateBounds);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', updateBounds);
+    };
+  }, [currentRoomUrl]);
+
+  // Compute exact pixel dimensions that fit inside the available stage without relying on dvh
+  // On mobile (< 1024px), keep the room canvas snug and capped so there is zero empty space above/below
+  // and taller phones expand the lower studio drawer instead of growing the canvas.
+  const fittedCanvasStyle = React.useMemo(() => {
+    if (viewScaleMode === 'native' && imageDimensions.width) {
+      return { width: `${imageDimensions.width}px`, height: `${imageDimensions.height}px` };
+    }
+    if (imageDimensions.width > 0 && imageDimensions.height > 0) {
+      const vw = stageBounds.width > 40 ? stageBounds.width : (typeof window !== 'undefined' ? window.innerWidth : 390);
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 844;
+      const isMobile = (typeof window !== 'undefined' ? window.innerWidth : vw) < 1024;
+      const imgRatio = imageDimensions.width / imageDimensions.height;
+
+      if (isMobile) {
+        const availW = Math.max(120, vw - 16);
+        const maxMobileH = vh < 700 ? 175 : 215;
+        let w = availW;
+        let h = w / imgRatio;
+        if (h > maxMobileH) {
+          h = maxMobileH;
+          w = h * imgRatio;
+        }
+        return { width: `${Math.floor(w)}px`, height: `${Math.floor(h)}px` };
+      }
+
+      if (stageBounds.width > 40 && stageBounds.height > 40) {
+        const pad = 32;
+        const availW = Math.max(80, stageBounds.width - pad);
+        const availH = Math.max(80, stageBounds.height - pad);
+        let w = availW;
+        let h = w / imgRatio;
+        if (h > availH) {
+          h = availH;
+          w = h * imgRatio;
+        }
+        return { width: `${Math.floor(w)}px`, height: `${Math.floor(h)}px` };
+      }
+    }
+    return undefined;
+  }, [viewScaleMode, stageBounds.width, stageBounds.height, imageDimensions.width, imageDimensions.height]);
+
   return (
-    <div className="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen lg:h-[100dvh] overflow-x-hidden transition-colors">
+    <div className="fixed inset-0 z-30 pb-14 lg:pb-0 lg:static lg:z-auto flex-1 min-h-0 flex flex-col bg-[#f7f5f0] dark:bg-stone-950 text-slate-900 dark:text-slate-100 lg:h-[100dvh] overflow-hidden transition-colors">
       
       {/* =========================================================================
-          TOP APP BAR (Mobile-First Ergonomics + Desktop High-End Toolbar)
+          TOP APP BAR (Ultra-Clean Mobile Header + Full Desktop Toolbar)
           ========================================================================= */}
-      <header className="px-3 sm:px-5 py-2.5 bg-white/95 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between gap-2 shadow-sm transition-colors">
+      <header className="h-12 lg:h-auto px-3 sm:px-5 py-1.5 sm:py-2 bg-white/95 dark:bg-stone-900/95 border-b border-stone-200/80 dark:border-stone-800 backdrop-blur-xl z-40 flex items-center justify-between gap-2 shadow-sm shrink-0 transition-colors">
         
-        {/* Left: Navigation Back & Room Indicator */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Left: Navigation Back & Brand */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={() => onNavigate ? onNavigate('landing') : window.history.back()}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
             title="Exit Studio"
             aria-label="Exit Studio"
           >
             <ArrowLeft size={18} />
           </button>
 
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-full sm:rounded-xl bg-gradient-to-br from-[#c59b63] to-[#8c6735] text-white font-serif font-bold text-xs flex items-center justify-center shadow-sm shrink-0">
               FA
             </span>
-            <div className="hidden sm:block">
-              <div className="text-xs font-serif font-bold text-stone-900 dark:text-stone-100 leading-tight flex items-center gap-1.5">
-                <span>AI Spatial Studio</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-bold border border-brand-200 dark:border-brand-500/30">
+            <div className="min-w-0">
+              <div className="text-sm sm:text-xs font-serif font-bold text-stone-900 dark:text-stone-100 leading-tight flex items-center gap-1.5 truncate">
+                <span className="truncate">FurnitureAura Studio</span>
+                <span className="hidden sm:inline-block text-[10px] px-1.5 py-0.2 rounded-md bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 font-sans font-bold border border-brand-200 dark:border-brand-500/30">
                   PRO
                 </span>
               </div>
-              <div className="text-xs text-stone-500 dark:text-stone-400 truncate max-w-[140px]">
+              <div className="hidden sm:block text-xs text-stone-500 dark:text-stone-400 truncate max-w-[160px]">
                 {roomTitle}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Center: Recent Creations, Upload, Camera, Demo Suites, New Room */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Center: Primary Room Actions (Desktop Only — Moved to External Canvas Toolbar on Mobile) */}
+        <div className="hidden lg:flex items-center gap-2">
           
-          {/* Recent Creations Button */}
+          {/* Recent Creations Button (Desktop & Tablet, tucked in More menu on Mobile) */}
           <button
             onClick={() => setIsRecentCreationsOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-stone-50 dark:bg-stone-900 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-200 font-semibold text-xs flex items-center gap-1.5 border border-stone-200 dark:border-stone-800 shadow-sm transition-all"
+            className="hidden sm:flex px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-stone-50 dark:bg-stone-900 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-200 font-semibold text-xs items-center gap-1.5 border border-stone-200 dark:border-stone-800 shadow-sm transition-all"
             title="View Recent Staged Creations"
           >
             <FolderHeart size={14} className="text-brand-600 dark:text-brand-400" />
-            <span className="hidden sm:inline">Creations</span>
+            <span>Creations</span>
             {recentCreations.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-[10px] font-bold">
                 {recentCreations.length}
@@ -1100,7 +1262,8 @@ export default function CustomerStudio({
                 if (onRequireAuth) onRequireAuth();
               }
             }}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-500/20 transition-all shrink-0"
+            className="h-8 px-2.5 sm:px-3 rounded-xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm shadow-brand-500/20 transition-all shrink-0"
+            title="Upload Room Photo"
           >
             <Upload size={13} />
             <span className="hidden xs:inline">Upload</span>
@@ -1131,7 +1294,7 @@ export default function CustomerStudio({
               }
               setIsCameraOpen(true);
             }}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-all shrink-0 shadow-sm"
+            className="h-8 px-2.5 sm:px-3 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-all shrink-0 shadow-sm"
             title="Capture live room photo"
           >
             <Camera size={13} className="text-amber-500" />
@@ -1140,10 +1303,10 @@ export default function CustomerStudio({
 
           {/* Demo Rooms Dropdown */}
           <div className="relative group shrink-0">
-            <button className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1 border border-slate-200 dark:border-slate-700 shadow-sm">
+            <button className="h-8 px-2 sm:px-3 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs flex items-center gap-1 border border-slate-200 dark:border-slate-700 shadow-sm">
               <span className="hidden sm:inline">Suites</span>
               <span className="sm:hidden">Demo</span>
-              <ChevronDown size={12} />
+              <ChevronDown size={11} />
             </button>
             <div className="absolute right-0 sm:left-0 mt-1 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl py-1.5 hidden group-hover:block z-50">
               <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-400">Sample Showrooms</div>
@@ -1166,11 +1329,11 @@ export default function CustomerStudio({
             </div>
           </div>
 
-          {/* New Room / Reset Session */}
+          {/* New Room / Reset Session (Desktop only, tucked in More menu on Mobile) */}
           {currentRoomUrl && (
             <button
               onClick={handleStartNewRoom}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1 transition-colors"
+              className="hidden sm:flex p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold items-center gap-1 transition-colors"
               title="Start a new room session"
             >
               <RotateCcw size={13} />
@@ -1179,37 +1342,37 @@ export default function CustomerStudio({
           )}
         </div>
 
-        {/* Right: Credits, Room Total Quote & Download */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        {/* Right: Credits & Actions (Compact Overflow Menu on Mobile) */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           
           {/* User Credits Pill */}
           {currentUser ? (
             <div 
-              className={`px-2.5 py-1 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border shadow-sm ${
+              className={`h-8 px-2 sm:px-2.5 rounded-xl text-xs font-extrabold flex items-center gap-1 border shadow-sm ${
                 hasCredits
                   ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-400'
                   : 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400'
               }`}
               title="Your AI Generation Credits"
             >
-              <Sparkles size={12} className={hasCredits ? "text-amber-500" : "text-rose-500"} />
-              <span className="tabular-nums">{currentUser.credits ?? 0}</span>
+              <Sparkles size={11} className={hasCredits ? "text-amber-500" : "text-rose-500"} />
+              <span className="tabular-nums text-[11px] sm:text-xs">{currentUser.credits ?? 0}</span>
               <span className="text-[10px] hidden sm:inline">credits</span>
             </div>
           ) : (
             <button
               onClick={() => onRequireAuth && onRequireAuth()}
-              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all"
+              className="h-8 px-2.5 sm:px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all"
             >
               <LogIn size={13} />
               <span>Sign In</span>
             </button>
           )}
 
-          {/* Room Quote Button */}
+          {/* Room Quote Button (Desktop, or inside More menu on Mobile) */}
           <button
             onClick={() => setIsQuoteOpen(true)}
-            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 flex items-center gap-1.5 transition-all shadow-sm"
+            className="hidden sm:flex px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 items-center gap-1.5 transition-all shadow-sm"
             title="Open Room Staged Quote"
           >
             <ShoppingBag size={14} className="text-emerald-600 dark:text-emerald-400" />
@@ -1218,38 +1381,140 @@ export default function CustomerStudio({
             </div>
           </button>
 
-          {/* Download HD */}
+          {/* Download HD (Desktop, or inside More menu on Mobile) */}
           <button
             onClick={downloadHDDesign}
             disabled={!currentRoomUrl}
-            className="w-9 h-9 sm:w-auto sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm disabled:opacity-40"
+            className="hidden sm:flex w-9 h-9 sm:w-auto sm:px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm disabled:opacity-40"
             title="Download HD Room Render"
           >
             <Download size={14} />
             <span className="hidden md:inline">Save HD</span>
           </button>
+
+          {/* Mobile Compact "More" Menu Button (Holds Creations, Quote, Save HD, New Room, Auto-Spread) */}
+          <div className="relative lg:hidden">
+            <button
+              type="button"
+              onClick={() => setIsMobileHeaderMenuOpen(prev => !prev)}
+              className="w-8 h-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-700 dark:text-slate-200 shadow-sm relative"
+              aria-label="More Studio Actions"
+            >
+              <MoreHorizontal size={16} />
+              {(recentCreations.length > 0 || currentRoomTotal > 0) && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-brand-500 border border-white dark:border-slate-900" />
+              )}
+            </button>
+
+            {isMobileHeaderMenuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsMobileHeaderMenuOpen(false)}
+                />
+                <div className="absolute right-0 mt-1.5 w-52 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl py-1.5 z-50 divide-y divide-stone-100 dark:divide-stone-800">
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileHeaderMenuOpen(false);
+                        setIsRecentCreationsOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FolderHeart size={14} className="text-brand-500" />
+                        <span>Recent Creations</span>
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded-full bg-brand-50 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 text-[10px]">
+                        {recentCreations.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileHeaderMenuOpen(false);
+                        setIsQuoteOpen(true);
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <ShoppingBag size={14} className="text-emerald-500" />
+                        <span>Room Quote</span>
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                        ${currentRoomTotal.toLocaleString()}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={!currentRoomUrl}
+                      onClick={() => {
+                        setIsMobileHeaderMenuOpen(false);
+                        downloadHDDesign();
+                      }}
+                      className="w-full px-3.5 py-2 text-left text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2 disabled:opacity-40"
+                    >
+                      <Download size={14} className="text-sky-500" />
+                      <span>Download HD Render</span>
+                    </button>
+                  </div>
+
+                  {currentRoomUrl && (
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileHeaderMenuOpen(false);
+                          autoSpreadSpots();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2"
+                      >
+                        <Move size={14} />
+                        <span>Auto-Spread Spot Tags</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsMobileHeaderMenuOpen(false);
+                          handleStartNewRoom();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center gap-2"
+                      >
+                        <RotateCcw size={14} />
+                        <span>Start Fresh Room</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
       {/* =========================================================================
           MAIN WORKSPACE: IMMERSIVE STAGE (LEFT) + ARCHITECTURAL CONTROLS (RIGHT)
           ========================================================================= */}
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
 
         {/* ---------------------------------------------------------------------
-            COLUMN 1: THE LIVING ROOM CANVAS STAGE
+            COLUMN 1: THE LIVING ROOM CANVAS STAGE + EXTERNAL CANVAS TOOLBAR
             --------------------------------------------------------------------- */}
-        <div className="flex-1 flex flex-col bg-[#f7f5f0] dark:bg-[#121110] overflow-hidden relative">
+        <div className="shrink-0 lg:flex-1 min-h-0 flex flex-col bg-[#f7f5f0] dark:bg-[#121110] overflow-visible lg:overflow-hidden relative z-20">
           
-          {/* Status Sub-bar */}
-          <div className="px-3 sm:px-4 py-2 bg-white/90 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800/80 flex items-center justify-between text-xs text-stone-600 dark:text-stone-400 backdrop-blur-sm">
-            <div className="flex items-center gap-2 overflow-hidden">
+          {/* Status Sub-bar (Desktop Only — Mobile uses the External Canvas Toolbar below the photo) */}
+          <div className="hidden lg:flex px-4 py-2 bg-white/90 dark:bg-stone-900/60 border-b border-stone-200 dark:border-stone-800/80 items-center justify-between text-xs text-stone-600 dark:text-stone-400 backdrop-blur-sm shrink-0">
+            <div className="flex items-center gap-2 overflow-hidden pr-2">
               <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse shrink-0" />
               <span className="text-xs text-stone-700 dark:text-stone-300 truncate">{statusBanner}</span>
             </div>
 
             {currentRoomUrl && (
-              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="flex items-center gap-3 shrink-0">
                 {imageDimensions.width > 0 && (
                   <div className="hidden md:flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-[10px] font-mono font-bold text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
                     <span>{imageDimensions.width}×{imageDimensions.height}</span>
@@ -1269,64 +1534,342 @@ export default function CustomerStudio({
                 </label>
                 <button
                   onClick={() => runSpatialVisionAnalysis()}
-                  className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-bold flex items-center gap-1"
+                  className="text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 font-bold flex items-center gap-1 px-1"
                   title="Re-scan spatial room tags with AI"
                 >
                   <RefreshCw size={11} />
-                  <span className="hidden xs:inline">Re-Scan</span>
+                  <span>Re-Scan</span>
                 </button>
                 <button
                   onClick={() => autoSpreadSpots()}
-                  className="text-xs text-stone-600 dark:text-stone-400 hover:text-[#c59b63] font-bold flex items-center gap-1"
+                  className="flex text-xs text-stone-600 dark:text-stone-400 hover:text-[#c59b63] font-bold items-center gap-1"
                   title="Auto-spread overlapping tags across distinct architectural areas"
                 >
                   <Move size={11} />
-                  <span className="hidden xs:inline">Auto-Spread</span>
+                  <span>Auto-Spread</span>
                 </button>
               </div>
             )}
           </div>
 
-          {/* Canvas Viewport Area */}
+          {/* Canvas Viewport Area — Snug top stage on mobile (zero empty top/bottom space), flex-1 on desktop */}
           <div
-            className={`flex-1 flex items-center justify-center ${imageDimensions.isPortrait ? 'p-1.5 sm:p-3' : 'p-2 sm:p-5'} overflow-auto relative canvas-dots min-h-[320px] sm:min-h-[420px]`}
+            ref={canvasViewportRef}
+            className="shrink-0 lg:flex-1 lg:min-h-0 relative overflow-hidden px-2 pt-1.5 pb-1 lg:p-0 lg:canvas-dots flex items-center justify-center"
             onClick={handleStageClick}
           >
-            {/* Clean Initial Dropzone (When no room is loaded) */}
-            {!currentRoomUrl ? (
-              <div className="max-w-md w-full p-6 sm:p-8 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-center shadow-xl space-y-4 mx-3 my-4">
-                <div className="w-16 h-16 rounded-2xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto shadow-inner">
-                  <ImageIcon size={32} />
-                </div>
-                <h2 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">
-                  Spatial AI Furniture Staging
-                </h2>
-                <p className="text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-                  Snap or upload any living room photo. Our neural spatial model detects furniture coordinates and stages real showroom pieces with realistic ambient shadows.
-                </p>
+            <div className={`w-full lg:absolute lg:inset-0 flex items-center justify-center ${imageDimensions.isPortrait ? 'lg:p-3' : 'lg:p-5'} overflow-auto`}>
+              {/* Clean Initial Dropzone (When no room is loaded) */}
+              {!currentRoomUrl ? (
+                <div className="max-w-md w-full p-4 sm:p-8 rounded-2xl sm:rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-center shadow-lg sm:shadow-xl space-y-2.5 sm:space-y-4 mx-1 my-auto">
+                  <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-2xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center mx-auto shadow-inner">
+                    <ImageIcon size={22} />
+                  </div>
+                  <h2 className="text-base sm:text-2xl font-serif font-bold text-stone-900 dark:text-stone-100">
+                    Spatial AI Furniture Staging
+                  </h2>
+                  <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 leading-relaxed line-clamp-2 sm:line-clamp-none">
+                    Snap or upload any living room photo. Our neural spatial model detects furniture coordinates and stages real showroom pieces.
+                  </p>
 
-                {/* Authentication Banner if not signed in */}
-                {!currentUser && (
-                  <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-left space-y-2">
-                    <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-bold text-xs">
-                      <Lock size={15} />
-                      <span>Sign In Required</span>
+                  {/* Authentication Banner if not signed in */}
+                  {!currentUser && (
+                    <div className="p-2.5 sm:p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-left space-y-1.5">
+                      <div className="flex items-center gap-2 text-amber-800 dark:text-amber-400 font-bold text-xs">
+                        <Lock size={14} />
+                        <span>Sign In Required (100 Free Credits)</span>
+                      </div>
+                      <button
+                        onClick={() => onRequireAuth && onRequireAuth()}
+                        className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <LogIn size={14} />
+                        <span>Sign In / Create Account</span>
+                      </button>
                     </div>
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Sign in or create an account to stage furniture. You will receive <strong>100 free starter AI credits</strong>!
-                    </p>
-                    <button
-                      onClick={() => onRequireAuth && onRequireAuth()}
-                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                  )}
+
+                  <div className="hidden lg:flex pt-1 flex-row gap-2.5 justify-center">
+                    <label 
+                      onClick={(e) => {
+                        if (!currentUser) {
+                          e.preventDefault();
+                          setStatusBanner('🔒 Sign in required to upload room photos.');
+                          if (onRequireAuth) onRequireAuth();
+                        }
+                      }}
+                      className="px-5 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-500/25 transition-all"
                     >
-                      <LogIn size={14} />
-                      <span>Sign In / Create Account (100 Free Credits)</span>
+                      <Upload size={15} />
+                      <span>Upload Photo</span>
+                      {currentUser && (
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => loadRoomImage(ev.target.result, file.name.replace(/\.[^/.]+$/, ""));
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      )}
+                    </label>
+
+                    <button
+                      onClick={() => {
+                        if (!currentUser) {
+                          setStatusBanner('🔒 Sign in required to use live camera.');
+                          if (onRequireAuth) onRequireAuth();
+                          return;
+                        }
+                        setIsCameraOpen(true);
+                      }}
+                      className="px-5 py-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-700 shadow-sm"
+                    >
+                      <Camera size={15} className="text-amber-500" />
+                      <span>Camera</span>
                     </button>
                   </div>
-                )}
 
-                <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
-                  <label 
+                  <div className="hidden lg:block pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                    <span className="text-[11px] text-slate-400 block mb-2 font-medium">Or explore with a sample room suite:</span>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {DEMO_ROOMS.map((demo, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            if (!currentUser) {
+                              setStatusBanner('🔒 Sign in required to stage demo rooms.');
+                              if (onRequireAuth) onRequireAuth();
+                              return;
+                            }
+                            loadRoomImage(demo.url, demo.name);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-sm"
+                        >
+                          {demo.name.split(' ')[0]} Suite
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  ref={stageWrapperRef}
+                  className={`relative inline-flex items-center justify-center rounded-2xl overflow-hidden shadow-md lg:shadow-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 select-none transition-all duration-300 ${
+                    viewScaleMode === 'native'
+                      ? 'max-w-none max-h-none'
+                      : 'max-w-full max-h-full'
+                  }`}
+                >
+                  {/* Active Room Canvas */}
+                  <canvas
+                    ref={roomCanvasRef}
+                    className={`block transition-all duration-200 ${
+                      viewScaleMode === 'native'
+                        ? 'max-w-none max-h-none'
+                        : 'w-full h-full object-contain'
+                    }`}
+                    style={fittedCanvasStyle}
+                  />
+
+                  {/* Before Overlay for Split Comparison */}
+                  <div
+                    className={`absolute inset-0 overflow-hidden pointer-events-none border-r-2 border-brand-500 z-20 ${
+                      isBeforeAfterOpen || isPeekingOriginal ? 'block' : 'hidden'
+                    }`}
+                    style={{ width: isPeekingOriginal ? '100%' : `${splitSliderVal}%` }}
+                  >
+                    <canvas
+                      ref={beforeCanvasRef}
+                      className="block w-full h-full object-contain"
+                    />
+                    <div className="absolute top-3 left-3 bg-stone-950/85 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-md">
+                      BEFORE (ORIGINAL)
+                    </div>
+                  </div>
+
+                  {/* Interactive Pins & Bounding Boxes Container */}
+                  <div
+                    ref={pinsContainerRef}
+                    className={`absolute inset-0 pointer-events-auto z-30 ${
+                      showPins && !isBeforeAfterOpen && !isPeekingOriginal ? 'block' : 'hidden'
+                    }`}
+                  >
+                    {componentPins.map((pin) => {
+                      const isSelected = Boolean(selectedPinId && pin.id && pin.id === selectedPinId);
+                      const w = Math.max(14, Math.min(85, Number(pin.boxW || pin.width || 34)));
+                      const h = Math.max(12, Math.min(65, Number(pin.boxH || pin.height || 22)));
+                      return (
+                        <React.Fragment key={pin.id || `pin-frag-${pin.name}`}>
+                          {/* 1. Architectural Bounding Box (Render ONLY for the single active selected furniture item) */}
+                          {isSelected && (
+                            <div
+                              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-none border-2 border-dashed border-brand-500 bg-brand-500/15 shadow-[0_0_25px_rgba(197,155,99,0.35)] ring-2 ring-white/60 z-20 select-none"
+                              style={{
+                                left: `${pin.x}%`,
+                                top: `${pin.y}%`,
+                                width: `${w}%`,
+                                height: `${h}%`
+                              }}
+                            >
+                              {/* Corner bounding accents */}
+                              <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-brand-400" />
+                              <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-brand-400" />
+                              <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-brand-400" />
+                              <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-brand-400" />
+                              
+                              {/* Dimension label tag (Desktop only — hidden on mobile to keep photo clean) */}
+                              <div className="hidden lg:block absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-stone-950/85 backdrop-blur-md text-[9px] font-mono font-bold text-brand-300 whitespace-nowrap shadow-md select-none border border-stone-700">
+                                {w}% × {h}% • {pin.name}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 2. Interactive Pin Tag Button (Compact dot for unselected pins on mobile; clean white/gold pill when selected) */}
+                          <div
+                            onPointerDown={(e) => handlePinPointerDown(e, pin)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPinId(pin.id);
+                            }}
+                            title={pin.name}
+                            className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing rounded-full text-[10px] sm:text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-xl transition-all select-none pointer-events-auto ${
+                              isSelected
+                                ? 'px-2.5 py-1 sm:py-1.5 bg-white/95 dark:bg-stone-900/95 text-stone-900 dark:text-white border border-brand-500 ring-2 ring-brand-500/30 scale-105 z-40'
+                                : 'w-5 h-5 sm:w-auto sm:h-auto sm:px-2.5 sm:py-1.5 bg-[#c59b63]/90 sm:bg-white/95 dark:bg-stone-900/90 text-white sm:text-stone-800 dark:text-stone-200 border-2 border-white sm:border sm:border-stone-300 dark:border-stone-700/80 hover:scale-110 z-30'
+                            }`}
+                            style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                          >
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-brand-500 animate-pulse' : 'hidden sm:inline-block bg-brand-500'}`}
+                            />
+                            <span className={`${isSelected ? 'inline max-w-[150px] sm:max-w-[170px]' : 'hidden sm:inline sm:max-w-[150px]'} truncate`}>
+                              {pin.name}
+                            </span>
+                            <span className={`${isSelected ? 'inline' : 'hidden sm:inline'} text-[9px] opacity-60`}>✥</span>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Floating Canvas Quick Controls Bar (Desktop Only — Mobile uses External Canvas Toolbar below photo) */}
+                  <div className="hidden lg:flex absolute bottom-3 inset-x-3 z-30 items-center justify-between pointer-events-none gap-1.5">
+                    {/* Left: Tag Spot & Expand Pill */}
+                    <div className="flex items-center gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
+                      <button
+                        onClick={() => setAddPinMode(!addPinMode)}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors ${
+                          addPinMode
+                            ? 'bg-brand-500 text-white shadow-md'
+                            : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
+                        }`}
+                        title="Click anywhere on canvas to tag a new furniture spot"
+                      >
+                        <Tag size={12} />
+                        <span>{addPinMode ? 'Tap Spot' : '+ Tag'}</span>
+                      </button>
+
+                      <button
+                        onClick={runAIOutpaint}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors"
+                        title="Expand room walls and flooring with AI Outpainting"
+                      >
+                        <Maximize2 size={12} className="text-brand-500" />
+                        <span>Expand</span>
+                      </button>
+                    </div>
+
+                    {/* Right: Compare & Hold Pill + View Mode Toggle */}
+                    <div className="flex items-center gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
+                      {/* View Scale Toggle (Fit vs 1:1 Actual Resolution) */}
+                      <button
+                        onClick={() => setViewScaleMode(prev => prev === 'fit' ? 'native' : 'fit')}
+                        className={`flex px-2.5 py-1.5 rounded-xl text-xs font-bold items-center gap-1 transition-colors ${
+                          viewScaleMode === 'native'
+                            ? 'bg-brand-500 text-white shadow-sm'
+                            : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
+                        }`}
+                        title={viewScaleMode === 'native' ? 'Switch to Adaptive Fit' : 'View in 100% Native Resolution'}
+                      >
+                        <ZoomIn size={13} />
+                        <span>{viewScaleMode === 'native' ? '1:1 Native' : 'Fit'}</span>
+                      </button>
+
+                      <button
+                        onClick={() => setIsBeforeAfterOpen(!isBeforeAfterOpen)}
+                        className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
+                          isBeforeAfterOpen
+                            ? 'bg-brand-500 text-white shadow-sm'
+                            : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
+                        }`}
+                        title="Split screen Before / After"
+                      >
+                        <SplitSquareVertical size={12} />
+                        <span>Split</span>
+                      </button>
+
+                      <button
+                        onMouseDown={() => setIsPeekingOriginal(true)}
+                        onMouseUp={() => setIsPeekingOriginal(false)}
+                        onMouseLeave={() => setIsPeekingOriginal(false)}
+                        onTouchStart={() => setIsPeekingOriginal(true)}
+                        onTouchEnd={() => setIsPeekingOriginal(false)}
+                        className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors select-none"
+                        title="Hold to peek at original v1 room"
+                      >
+                        <Eye size={12} className="text-emerald-500" />
+                        <span>v1</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* AI Processing Overlay & Laser Scanner */}
+                  {isAILoading && (
+                    <div className="absolute inset-0 bg-white/95 dark:bg-stone-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+                      <div className="ai-scanner-bar" />
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-2xl sm:rounded-3xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3 shadow-xl shadow-brand-500/20 animate-bounce">
+                        ✨
+                      </div>
+                      <h3 className="font-extrabold text-sm sm:text-lg text-stone-900 dark:text-white mb-1 font-serif">{aiLoadingTitle}</h3>
+                      <p className="text-[11px] sm:text-xs text-stone-500 dark:text-stone-400 max-w-sm">{aiLoadingSubtitle}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* =====================================================================
+              DEDICATED EXTERNAL CANVAS TOOLBAR (Mobile Only — Directly Below Room Photo)
+              Upper Row: Highlighted "YOUR ROOM" Capsule (Upload + Camera) | Canvas Tools (Tag, v1 Peek, More)
+              Lower Row: Version Pills (v1: Original, v2: Staged) + Tags Toggle
+              ===================================================================== */}
+          <div className="lg:hidden shrink-0 bg-[#f7f5f0] dark:bg-stone-950 px-2.5 pt-1 pb-2 space-y-1.5 relative z-30">
+            
+            {/* Upper Row: Highlighted "YOUR ROOM" Group + Canvas Tools (Tag, v1 Peek, More) */}
+            <div className="flex items-stretch gap-1.5">
+              
+              {/* HIGHLIGHTED "YOUR ROOM" GROUP (Upload & Camera) */}
+              <div className="flex-[1.35] rounded-2xl bg-gradient-to-br from-[#fcf9f3] via-[#f5ecde] to-[#ede0cc] dark:from-stone-900 dark:via-stone-900 dark:to-stone-800 border border-[#c59b63]/70 dark:border-[#c59b63]/50 px-2 pt-1 pb-1.5 shadow-sm flex flex-col justify-between">
+                <div className="flex items-center justify-between px-0.5 mb-1">
+                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#8c6430] dark:text-[#d9b37c] flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#c59b63]" />
+                    Your Room
+                  </span>
+                  <span className="text-[8px] font-bold text-[#a37b45] dark:text-stone-400">
+                    Step 1
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5">
+                  {/* 1. Upload Room Photo (Primary Brushed Gold Pill) */}
+                  <label
                     onClick={(e) => {
                       if (!currentUser) {
                         e.preventDefault();
@@ -1334,10 +1877,10 @@ export default function CustomerStudio({
                         if (onRequireAuth) onRequireAuth();
                       }
                     }}
-                    className="px-5 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-brand-500/25 transition-all"
+                    className="py-1.5 px-2 rounded-xl bg-gradient-to-r from-[#c59b63] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] text-white font-extrabold text-[11px] flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all cursor-pointer select-none"
                   >
-                    <Upload size={16} />
-                    <span>Upload Room Photo</span>
+                    <Upload size={13} strokeWidth={2.4} className="shrink-0" />
+                    <span>Upload</span>
                     {currentUser && (
                       <input
                         type="file"
@@ -1355,7 +1898,9 @@ export default function CustomerStudio({
                     )}
                   </label>
 
+                  {/* 2. Live Camera Capture (Crisp Ivory Pill with Gold Accent) */}
                   <button
+                    type="button"
                     onClick={() => {
                       if (!currentUser) {
                         setStatusBanner('🔒 Sign in required to use live camera.');
@@ -1364,239 +1909,209 @@ export default function CustomerStudio({
                       }
                       setIsCameraOpen(true);
                     }}
-                    className="px-5 py-3 rounded-2xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-xs flex items-center justify-center gap-2 border border-slate-300 dark:border-slate-700 shadow-sm"
+                    className="py-1.5 px-2 rounded-xl bg-white dark:bg-stone-800 border border-[#c59b63]/50 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-extrabold text-[11px] flex items-center justify-center gap-1 shadow-sm active:scale-95 transition-all select-none"
                   >
-                    <Camera size={16} className="text-amber-500" />
-                    <span>Launch Camera</span>
+                    <Camera size={13} strokeWidth={2.2} className="text-[#b0854b] shrink-0" />
+                    <span>Camera</span>
                   </button>
                 </div>
-
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80">
-                  <span className="text-[11px] text-slate-400 block mb-2 font-medium">Or explore with a sample room suite:</span>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {DEMO_ROOMS.map((demo, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => {
-                          if (!currentUser) {
-                            setStatusBanner('🔒 Sign in required to stage demo rooms.');
-                            if (onRequireAuth) onRequireAuth();
-                            return;
-                          }
-                          loadRoomImage(demo.url, demo.name);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-300 transition-colors shadow-sm"
-                      >
-                        {demo.name.split(' ')[0]} Suite
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
-            ) : (
-              <div
-                ref={stageWrapperRef}
-                className={`relative inline-block rounded-2xl overflow-hidden shadow-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 select-none transition-all duration-300 ${
-                  viewScaleMode === 'native'
-                    ? 'max-w-none max-h-none'
-                    : imageDimensions.isPortrait
-                      ? 'max-h-[calc(100vh-140px)]'
-                      : 'max-w-full max-h-full'
-                }`}
-                style={{
-                  aspectRatio: imageDimensions.width && imageDimensions.height 
-                    ? `${imageDimensions.width} / ${imageDimensions.height}` 
-                    : undefined
-                }}
-              >
-                {/* Active Room Canvas */}
-                <canvas
-                  ref={roomCanvasRef}
-                  className={`block transition-all duration-200 ${
-                    viewScaleMode === 'native'
-                      ? 'max-w-none max-h-none'
-                      : imageDimensions.isPortrait
-                        ? 'max-h-[58vh] sm:max-h-[68vh] lg:max-h-[calc(100vh-160px)] w-auto h-auto max-w-full object-contain'
-                        : 'max-h-[46vh] sm:max-h-[58vh] lg:max-h-[76vh] w-auto h-auto max-w-full object-contain'
-                  }`}
-                  style={
-                    viewScaleMode === 'native' && imageDimensions.width
-                      ? { width: `${imageDimensions.width}px`, height: `${imageDimensions.height}px` }
-                      : undefined
-                  }
-                />
 
-                {/* Before Overlay for Split Comparison */}
-                <div
-                  className={`absolute inset-0 overflow-hidden pointer-events-none border-r-2 border-brand-500 z-20 ${
-                    isBeforeAfterOpen || isPeekingOriginal ? 'block' : 'hidden'
-                  }`}
-                  style={{ width: isPeekingOriginal ? '100%' : `${splitSliderVal}%` }}
-                >
-                  <canvas
-                    ref={beforeCanvasRef}
-                    className="block w-full h-full object-contain"
-                  />
-                  <div className="absolute top-3 left-3 bg-stone-950/85 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-white shadow-md">
-                    BEFORE (ORIGINAL)
-                  </div>
-                </div>
-
-                {/* Interactive Pins & Bounding Boxes Container */}
-                <div
-                  ref={pinsContainerRef}
-                  className={`absolute inset-0 pointer-events-auto z-30 ${
-                    showPins && !isBeforeAfterOpen && !isPeekingOriginal ? 'block' : 'hidden'
+              {/* CANVAS TOOLS GROUP (Tag, v1 Peek, More ⋯) */}
+              <div className="flex-1 rounded-2xl bg-white/80 dark:bg-stone-900/80 border border-stone-200/90 dark:border-stone-800 px-1.5 py-1 shadow-sm grid grid-cols-3 gap-0.5 items-center">
+                {/* 3. Tag (+ Tag Spot) */}
+                <button
+                  type="button"
+                  disabled={!currentRoomUrl}
+                  onClick={() => setAddPinMode(!addPinMode)}
+                  className={`h-full py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all select-none disabled:opacity-40 ${
+                    addPinMode
+                      ? 'bg-[#c59b63] text-white shadow-sm'
+                      : 'text-stone-800 dark:text-stone-200 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
                 >
-                  {componentPins.map((pin) => {
-                    const isSelected = Boolean(selectedPinId && pin.id && pin.id === selectedPinId);
-                    const w = Math.max(14, Math.min(85, Number(pin.boxW || pin.width || 34)));
-                    const h = Math.max(12, Math.min(65, Number(pin.boxH || pin.height || 22)));
-                    return (
-                      <React.Fragment key={pin.id || `pin-frag-${pin.name}`}>
-                        {/* 1. Architectural Bounding Box (Render ONLY for the single active selected furniture item) */}
-                        {isSelected && (
-                          <div
-                            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-xl transition-all pointer-events-none border-2 border-dashed border-brand-500 bg-brand-500/15 shadow-[0_0_25px_rgba(197,155,99,0.35)] ring-2 ring-white/60 z-20 select-none"
-                            style={{
-                              left: `${pin.x}%`,
-                              top: `${pin.y}%`,
-                              width: `${w}%`,
-                              height: `${h}%`
-                            }}
-                          >
-                            {/* Corner bounding accents */}
-                            <div className="absolute -top-1.5 -left-1.5 w-3 h-3 border-t-2 border-l-2 border-brand-400" />
-                            <div className="absolute -top-1.5 -right-1.5 w-3 h-3 border-t-2 border-r-2 border-brand-400" />
-                            <div className="absolute -bottom-1.5 -left-1.5 w-3 h-3 border-b-2 border-l-2 border-brand-400" />
-                            <div className="absolute -bottom-1.5 -right-1.5 w-3 h-3 border-b-2 border-r-2 border-brand-400" />
-                            
-                            {/* Dimension label tag (selected item) */}
-                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-stone-950/85 backdrop-blur-md text-[9px] font-mono font-bold text-brand-300 whitespace-nowrap shadow-md select-none border border-stone-700">
-                              {w}% × {h}% • {pin.name}
-                            </div>
-                          </div>
-                        )}
+                  <Plus size={16} strokeWidth={2.2} />
+                  <span className="text-[10px] font-bold leading-none">{addPinMode ? 'Tap' : 'Tag'}</span>
+                </button>
 
-                        {/* 2. Interactive Pin Tag Button */}
-                        <div
-                          onPointerDown={(e) => handlePinPointerDown(e, pin)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPinId(pin.id);
+                {/* 4. v1 Peek */}
+                <button
+                  type="button"
+                  disabled={!currentRoomUrl}
+                  onMouseDown={() => setIsPeekingOriginal(true)}
+                  onMouseUp={() => setIsPeekingOriginal(false)}
+                  onMouseLeave={() => setIsPeekingOriginal(false)}
+                  onTouchStart={() => setIsPeekingOriginal(true)}
+                  onTouchEnd={() => setIsPeekingOriginal(false)}
+                  className={`h-full py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all select-none disabled:opacity-40 ${
+                    isPeekingOriginal
+                      ? 'bg-[#c59b63] text-white shadow-sm'
+                      : 'text-stone-800 dark:text-stone-200 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
+                  }`}
+                >
+                  <Eye size={16} strokeWidth={2} />
+                  <span className="text-[10px] font-bold leading-none">v1 Peek</span>
+                </button>
+
+                {/* 5. More (Demo, Expand, Split, Re-Scan) */}
+                <div className="relative h-full flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setIsCanvasMoreOpen(prev => !prev)}
+                    className={`w-full h-full py-1 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all select-none ${
+                      isCanvasMoreOpen || isBeforeAfterOpen
+                        ? 'bg-stone-200 dark:bg-stone-800 text-[#b0854b] dark:text-brand-400'
+                        : 'text-stone-800 dark:text-stone-200 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
+                    }`}
+                  >
+                    <MoreHorizontal size={16} strokeWidth={2.1} />
+                    <span className="text-[10px] font-bold leading-none">More</span>
+                  </button>
+
+                {/* Expandable "More" Menu (Demo Rooms, Expand, Split, Re-Scan) */}
+                {isCanvasMoreOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsCanvasMoreOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 w-56 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xl p-2 z-50 space-y-1.5">
+                      <div className="grid grid-cols-3 gap-1">
+                        {/* Expand (AI Outpaint) */}
+                        <button
+                          type="button"
+                          disabled={!currentRoomUrl}
+                          onClick={() => {
+                            setIsCanvasMoreOpen(false);
+                            runAIOutpaint();
                           }}
-                          className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-grab active:cursor-grabbing px-2.5 py-1.5 rounded-full text-[10px] sm:text-xs font-extrabold flex items-center gap-1.5 shadow-xl transition-all select-none pointer-events-auto ${
-                            isSelected
-                              ? 'bg-brand-500 text-white ring-4 ring-brand-500/35 scale-110 z-40'
-                              : 'bg-white/95 dark:bg-stone-900/90 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700/80 hover:scale-105 z-30'
-                          }`}
-                          style={{ left: `${pin.x}%`, top: `${pin.y}%` }}
+                          className="p-2 rounded-xl bg-stone-50 dark:bg-stone-800/70 hover:bg-stone-100 dark:hover:bg-stone-800 flex flex-col items-center gap-1 text-stone-800 dark:text-stone-200 disabled:opacity-40"
                         >
-                          <span
-                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-amber-300 animate-pulse' : 'bg-brand-500'}`}
-                          />
-                          <span className="max-w-[120px] sm:max-w-[160px] truncate">{pin.name}</span>
-                          <span className="text-[9px] opacity-60">✥</span>
+                          <Maximize2 size={14} className="text-[#b0854b]" />
+                          <span className="text-[10px] font-bold">Expand</span>
+                        </button>
+
+                        {/* Split View */}
+                        <button
+                          type="button"
+                          disabled={!currentRoomUrl}
+                          onClick={() => {
+                            setIsBeforeAfterOpen(!isBeforeAfterOpen);
+                            setIsCanvasMoreOpen(false);
+                          }}
+                          className={`p-2 rounded-xl flex flex-col items-center gap-1 disabled:opacity-40 ${
+                            isBeforeAfterOpen
+                              ? 'bg-[#c59b63] text-white'
+                              : 'bg-stone-50 dark:bg-stone-800/70 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200'
+                          }`}
+                        >
+                          <SplitSquareVertical size={14} />
+                          <span className="text-[10px] font-bold">Split</span>
+                        </button>
+
+                        {/* Re-Scan */}
+                        <button
+                          type="button"
+                          disabled={!currentRoomUrl}
+                          onClick={() => {
+                            setIsCanvasMoreOpen(false);
+                            runSpatialVisionAnalysis();
+                          }}
+                          className="p-2 rounded-xl bg-stone-50 dark:bg-stone-800/70 hover:bg-stone-100 dark:hover:bg-stone-800 flex flex-col items-center gap-1 text-stone-800 dark:text-stone-200 disabled:opacity-40"
+                        >
+                          <RefreshCw size={14} className="text-[#b0854b]" />
+                          <span className="text-[10px] font-bold">Re-Scan</span>
+                        </button>
+                      </div>
+
+                      {/* Demo Rooms List */}
+                      <div className="pt-1.5 border-t border-stone-100 dark:border-stone-800">
+                        <div className="px-2 pb-1 text-[9px] font-extrabold uppercase tracking-wider text-stone-400">
+                          Demo Room Suites
                         </div>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-
-                {/* Floating Canvas Quick Controls Bar (Mobile & Desktop) */}
-                <div className={`absolute bottom-3 inset-x-2 sm:inset-x-3 z-30 flex items-center justify-between pointer-events-none gap-1.5 ${
-                  imageDimensions.isPortrait ? 'flex-wrap sm:flex-nowrap' : ''
-                }`}>
-                  {/* Left: Tag Spot & Expand Pill */}
-                  <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
-                    <button
-                      onClick={() => setAddPinMode(!addPinMode)}
-                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-colors ${
-                        addPinMode
-                          ? 'bg-brand-500 text-white shadow-md'
-                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                      title="Click anywhere on canvas to tag a new furniture spot"
-                    >
-                      <Tag size={13} />
-                      <span className="text-[11px] sm:text-xs">{addPinMode ? 'Click Room' : '+ Tag'}</span>
-                    </button>
-
-                    <button
-                      onClick={runAIOutpaint}
-                      className="px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors"
-                      title="Expand room walls and flooring with AI Outpainting"
-                    >
-                      <Maximize2 size={13} className="text-brand-500" />
-                      <span className="text-[11px] sm:text-xs">Expand</span>
-                    </button>
-                  </div>
-
-                  {/* Right: Compare & Hold Pill + View Mode Toggle */}
-                  <div className="flex items-center gap-1 sm:gap-1.5 pointer-events-auto bg-white/95 dark:bg-stone-900/95 backdrop-blur-md p-1 rounded-2xl border border-stone-200/80 dark:border-stone-800 shadow-lg">
-                    {/* View Scale Toggle (Fit vs 1:1 Actual Resolution) */}
-                    <button
-                      onClick={() => setViewScaleMode(prev => prev === 'fit' ? 'native' : 'fit')}
-                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold flex items-center gap-1 transition-colors ${
-                        viewScaleMode === 'native'
-                          ? 'bg-brand-500 text-white shadow-sm'
-                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                      title={viewScaleMode === 'native' ? 'Switch to Adaptive Fit' : 'View in 100% Native Resolution'}
-                    >
-                      <ZoomIn size={13} />
-                      <span className="hidden xs:inline">{viewScaleMode === 'native' ? '1:1 Native' : 'Fit'}</span>
-                    </button>
-
-                    <button
-                      onClick={() => setIsBeforeAfterOpen(!isBeforeAfterOpen)}
-                      className={`px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors ${
-                        isBeforeAfterOpen
-                          ? 'bg-brand-500 text-white shadow-sm'
-                          : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
-                      }`}
-                      title="Split screen Before / After"
-                    >
-                      <SplitSquareVertical size={13} />
-                      <span className="hidden sm:inline">Split</span>
-                    </button>
-
-                    <button
-                      onMouseDown={() => setIsPeekingOriginal(true)}
-                      onMouseUp={() => setIsPeekingOriginal(false)}
-                      onMouseLeave={() => setIsPeekingOriginal(false)}
-                      onTouchStart={() => setIsPeekingOriginal(true)}
-                      onTouchEnd={() => setIsPeekingOriginal(false)}
-                      className="px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center gap-1 transition-colors select-none"
-                      title="Hold to peek at original v1 room"
-                    >
-                      <Eye size={13} className="text-emerald-500" />
-                      <span>v1</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* AI Processing Overlay & Laser Scanner */}
-                {isAILoading && (
-                  <div className="absolute inset-0 bg-white/95 dark:bg-stone-950/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center">
-                    <div className="ai-scanner-bar" />
-                    <div className="w-14 h-14 rounded-3xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200 dark:border-brand-500/30 text-brand-600 dark:text-brand-400 flex items-center justify-center text-2xl mb-3 shadow-xl shadow-brand-500/20 animate-bounce">
-                      ✨
+                        <div className="space-y-0.5">
+                          {DEMO_ROOMS.map((room, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setIsCanvasMoreOpen(false);
+                                if (!currentUser) {
+                                  setStatusBanner('🔒 Sign in required to stage demo rooms.');
+                                  if (onRequireAuth) onRequireAuth();
+                                  return;
+                                }
+                                loadRoomImage(room.url, room.name);
+                              }}
+                              className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-semibold text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 flex items-center justify-between transition-colors"
+                            >
+                              <span className="truncate">{room.name}</span>
+                              <span className="text-[10px] text-[#b0854b] font-bold shrink-0">Load</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <h3 className="font-extrabold text-base sm:text-lg text-stone-900 dark:text-white mb-1 font-serif">{aiLoadingTitle}</h3>
-                    <p className="text-xs text-stone-500 dark:text-stone-400 max-w-sm">{aiLoadingSubtitle}</p>
-                  </div>
+                  </>
                 )}
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Lower Row: Version History Pills (v1: Original, v2: Staged) + Tags Toggle Pill */}
+            <div className="flex items-center justify-center gap-2 overflow-x-auto no-scrollbar pt-0.5">
+              {versionHistory.length > 0 ? (
+                versionHistory.map((ver, idx) => {
+                  const isAct = idx === activeVersionIndex;
+                  const shortLabel = idx === 0 ? 'v1: Original' : ver.label.length > 18 ? `v${idx + 1}: Staged` : ver.label;
+                  return (
+                    <button
+                      key={ver.id}
+                      type="button"
+                      onClick={() => rollbackToVersion(idx)}
+                      className={`px-3.5 py-1 rounded-full text-xs font-bold transition-all shrink-0 ${
+                        isAct
+                          ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white border border-[#b0854b] shadow-sm'
+                          : 'bg-stone-200/75 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-300/70'
+                      }`}
+                    >
+                      {shortLabel}
+                    </button>
+                  );
+                })
+              ) : (
+                <span className="px-3.5 py-1 rounded-full text-xs font-bold bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700">
+                  v1: Original
+                </span>
+              )}
+
+              {/* ☑ Tags Toggle Pill */}
+              <button
+                type="button"
+                onClick={() => setShowPins(!showPins)}
+                className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all shrink-0 ${
+                  showPins
+                    ? 'bg-stone-200/85 dark:bg-stone-800 text-stone-900 dark:text-stone-100 border border-stone-300/80 dark:border-stone-700'
+                    : 'bg-stone-100 dark:bg-stone-900 text-stone-400 border border-stone-200 dark:border-stone-800'
+                }`}
+              >
+                <span className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${
+                  showPins
+                    ? 'border-stone-800 dark:border-stone-200 bg-stone-800 dark:bg-stone-200 text-white dark:text-stone-900'
+                    : 'border-stone-400'
+                }`}>
+                  {showPins && <Check size={10} strokeWidth={3} />}
+                </span>
+                <span>Tags</span>
+              </button>
+            </div>
           </div>
 
-          {/* Version History Stack Bar */}
-          <div className="px-3 sm:px-5 py-2 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-3 overflow-x-auto shrink-0">
+          {/* Desktop Version History Stack Bar */}
+          <div className="hidden lg:flex px-5 py-2 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 items-center justify-between gap-2 overflow-x-auto shrink-0">
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 flex items-center gap-1">
-                <Clock size={12} /> Versions:
+                <Clock size={11} /> Versions:
               </span>
               <div className="flex items-center gap-1.5 overflow-x-auto">
                 {versionHistory.map((ver, idx) => (
@@ -1621,166 +2136,254 @@ export default function CustomerStudio({
         </div>
 
         {/* ---------------------------------------------------------------------
-            COLUMN 2: ARCHITECTURAL REPLACEMENT PANEL (Mobile Drawer & Desktop Sidebar)
+            COLUMN 2: EXPANDED LOWER STUDIO DRAWER (Automatically Expands/Contracts per Mobile Height) & DESKTOP SIDEBAR
             --------------------------------------------------------------------- */}
-        <aside className={`w-full ${imageDimensions.isPortrait ? 'lg:w-[440px] xl:w-[480px]' : 'lg:w-[420px] xl:w-[460px]'} bg-white dark:bg-stone-900 border-t lg:border-t-0 lg:border-l border-stone-200 dark:border-stone-800 flex flex-col justify-between overflow-y-auto shrink-0 shadow-lg lg:shadow-none transition-all duration-300`}>
+        <aside className={`flex-1 min-h-0 lg:flex-none lg:h-auto lg:max-h-none w-full ${imageDimensions.isPortrait ? 'lg:w-[440px] xl:w-[480px]' : 'lg:w-[420px] xl:w-[460px]'} bg-white dark:bg-stone-900 border-t lg:border-t-0 lg:border-l border-stone-200 dark:border-stone-800 rounded-t-3xl lg:rounded-none flex flex-col justify-between overflow-hidden lg:overflow-y-auto shadow-[0_-8px_25px_rgba(0,0,0,0.06)] lg:shadow-none z-20`}>
           
-          <div className="p-4 sm:p-5 space-y-4">
+          {/* Static Mobile Drawer Drag Handle */}
+          <div className="lg:hidden pt-2 pb-1 shrink-0 flex items-center justify-center">
+            <div className="w-10 h-1 rounded-full bg-stone-300/80 dark:bg-stone-700" />
+          </div>
 
-            {/* Active Pin Controller Card */}
+          <div className="px-3.5 py-1.5 sm:p-5 space-y-2.5 sm:space-y-4 overflow-y-auto flex-1 min-h-0 flex flex-col justify-start">
+
+            {/* SECTION 1: Active Pin Controller Card (Target Room Spot — Minimalistic & Complete) */}
             {selectedPin && (
-              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-3 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-brand-500" />
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-brand-600 dark:text-brand-400">
-                      Target Room Spot
-                    </span>
-                  </div>
+              <div className={`${mobileFooterTab === 'spot' ? 'block' : 'hidden'} lg:block space-y-3`}>
+                
+                {/* Active Spot Header Card */}
+                <div className="p-3 rounded-2xl bg-stone-50/90 dark:bg-stone-950/70 border border-stone-200/90 dark:border-stone-800 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="w-2 h-2 rounded-full bg-[#c59b63] shrink-0" />
+                      {isEditingPinName ? (
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={selectedPin.name}
+                            onChange={(e) => {
+                              const newName = e.target.value;
+                              setComponentPins(prev =>
+                                prev.map(p => (p.id === selectedPin.id ? { ...p, name: newName } : p))
+                              );
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') setIsEditingPinName(false);
+                            }}
+                            placeholder="e.g. Living Room Leather Sofa"
+                            className="flex-1 min-w-0 bg-white dark:bg-stone-900 border border-[#c59b63] rounded-lg px-2.5 py-1 text-xs font-bold text-stone-900 dark:text-white focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setIsEditingPinName(false)}
+                            className="px-2.5 py-1 rounded-lg bg-[#c59b63] text-white text-[11px] font-bold shrink-0"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[9px] font-extrabold uppercase tracking-wider text-[#b0854b] dark:text-brand-400 block leading-none mb-0.5">
+                            Active Target Spot
+                          </span>
+                          <div className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-stone-100 truncate">
+                            {selectedPin.name}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Spot Selector Dropdown & Delete */}
-                  <div className="flex items-center gap-1">
-                    <select
-                      value={selectedPin.id}
-                      onChange={(e) => {
-                        setSelectedPinId(e.target.value);
-                        setIsEditingPinName(false);
-                      }}
-                      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg px-2 py-1 text-[11px] font-bold text-stone-800 dark:text-stone-200 focus:outline-none focus:border-brand-500 max-w-[150px] truncate"
-                    >
-                      {componentPins.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.category})
-                        </option>
-                      ))}
-                    </select>
+                    {!isEditingPinName && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingPinName(true)}
+                          className="p-1.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:text-[#b0854b] transition-colors shadow-sm"
+                          title="Rename spot"
+                        >
+                          <Edit2 size={13} />
+                        </button>
 
-                    {componentPins.length > 1 && (
-                      <button
-                        onClick={() => {
-                          const remaining = componentPins.filter(p => p.id !== selectedPin.id);
-                          setComponentPins(remaining);
-                          setSelectedPinId(remaining[0].id);
-                          setIsEditingPinName(false);
-                        }}
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
-                        title="Delete spot tag"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                        {componentPins.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const remaining = componentPins.filter(p => p.id !== selectedPin.id);
+                              setComponentPins(remaining);
+                              setSelectedPinId(remaining[0].id);
+                              setIsEditingPinName(false);
+                            }}
+                            className="p-1.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors shadow-sm"
+                            title="Delete spot tag"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                {/* Spot Name In-Place Editor */}
-                <div className="p-2.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800/90 shadow-sm flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Spot Label & Role</span>
-                    <button
-                      onClick={() => setIsEditingPinName(!isEditingPinName)}
-                      className="text-[11px] text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 font-semibold"
-                    >
-                      {isEditingPinName ? (
-                        <>
-                          <Check size={12} />
-                          <span>Done</span>
-                        </>
-                      ) : (
-                        <>
-                          <Edit2 size={12} />
-                          <span>Rename Spot</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  {isEditingPinName ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        autoFocus
-                        value={selectedPin.name}
-                        onChange={(e) => {
-                          const newName = e.target.value;
-                          setComponentPins(prev =>
-                            prev.map(p => (p.id === selectedPin.id ? { ...p, name: newName } : p))
-                          );
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') setIsEditingPinName(false);
-                        }}
-                        placeholder="e.g. Master Velvet Sofa, Reading Corner Armchair"
-                        className="flex-1 bg-stone-50 dark:bg-stone-800 border border-brand-400 dark:border-brand-500 rounded-lg px-2.5 py-1.5 text-xs font-bold text-stone-900 dark:text-white focus:outline-none ring-2 ring-brand-500/20"
-                      />
+                  {/* Minimalistic Detected Room Spots Grid */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                      <span>Switch Spot ({componentPins.length})</span>
                       <button
-                        onClick={() => setIsEditingPinName(false)}
-                        className="px-2.5 py-1.5 rounded-lg bg-brand-500 text-white text-xs font-bold shrink-0 hover:bg-brand-600 transition-colors"
+                        type="button"
+                        onClick={() => setAddPinMode(!addPinMode)}
+                        className="text-[#b0854b] dark:text-brand-400 font-extrabold flex items-center gap-0.5 hover:underline"
                       >
-                        Save
+                        <Plus size={11} />
+                        <span>{addPinMode ? 'Tap Room Photo...' : 'Add Spot'}</span>
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex items-center justify-between text-xs font-bold text-stone-800 dark:text-stone-100">
-                      <span className="truncate">{selectedPin.name}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-extrabold uppercase shrink-0">
-                        {selectedPin.category}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Spot Dimensions Tuning */}
-                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-stone-200 dark:border-stone-800/80">
-                  <div>
-                    <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
-                      <span>Width Scale</span>
-                      <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxW}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="14"
-                      max="85"
-                      value={selectedPin.boxW}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setComponentPins(prev =>
-                          prev.map(p => (p.id === selectedPin.id ? { ...p, boxW: val } : p))
+                    <div className="grid grid-cols-2 gap-1.5 max-h-[112px] overflow-y-auto pr-0.5 no-scrollbar">
+                      {componentPins.map((p) => {
+                        const isActSpot = p.id === selectedPin.id;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPinId(p.id);
+                              setIsEditingPinName(false);
+                            }}
+                            className={`px-2.5 py-2 rounded-xl border text-left flex items-center gap-2 transition-all ${
+                              isActSpot
+                                ? 'bg-white dark:bg-stone-900 border-[#c59b63] text-stone-900 dark:text-white shadow-sm ring-1 ring-[#c59b63]/30'
+                                : 'bg-white/60 dark:bg-stone-900/40 border-stone-200/80 dark:border-stone-800 text-stone-600 dark:text-stone-400 hover:bg-white'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${isActSpot ? 'bg-[#c59b63]' : 'bg-stone-300 dark:bg-stone-700'}`} />
+                            <span className="text-[11px] font-bold truncate flex-1">{p.name}</span>
+                          </button>
                         );
-                      }}
-                      className="w-full accent-brand-500 h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
-                    />
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
-                      <span>Height Scale</span>
-                      <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxH}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="12"
-                      max="75"
-                      value={selectedPin.boxH}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
-                        setComponentPins(prev =>
-                          prev.map(p => (p.id === selectedPin.id ? { ...p, boxH: val } : p))
+
+                  {/* Spot Category Type Pills */}
+                  <div className="space-y-1 pt-1 border-t border-stone-200/70 dark:border-stone-800/80">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
+                      Furniture Category
+                    </span>
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                      {['sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].map((cat) => {
+                        const isCat = (selectedPin.category || '').toLowerCase() === cat;
+                        return (
+                          <button
+                            key={cat}
+                            type="button"
+                            onClick={() => {
+                              setComponentPins(prev =>
+                                prev.map(p => (p.id === selectedPin.id ? { ...p, category: cat } : p))
+                              );
+                              setActiveCatalogCategory(cat);
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold capitalize shrink-0 border transition-all ${
+                              isCat
+                                ? 'bg-[#c59b63] text-white border-[#c59b63] shadow-sm'
+                                : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800'
+                            }`}
+                          >
+                            {cat}
+                          </button>
                         );
-                      }}
-                      className="w-full accent-brand-500 h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
-                    />
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Bounding Box Scale & Minimal Size Presets */}
+                  <div className="space-y-2 pt-2 border-t border-stone-200/70 dark:border-stone-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                        Box Scale
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { label: 'Compact', w: 24, h: 16 },
+                          { label: 'Standard', w: 38, h: 25 },
+                          { label: 'Wide', w: 56, h: 34 }
+                        ].map((preset) => {
+                          const isPreset = Math.abs(selectedPin.boxW - preset.w) <= 3 && Math.abs(selectedPin.boxH - preset.h) <= 3;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => {
+                                setComponentPins(prev =>
+                                  prev.map(p => (p.id === selectedPin.id ? { ...p, boxW: preset.w, boxH: preset.h } : p))
+                                );
+                              }}
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border transition-all ${
+                                isPreset
+                                  ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
+                                  : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
+                          <span>Width</span>
+                          <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxW}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="14"
+                          max="85"
+                          value={selectedPin.boxW}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setComponentPins(prev =>
+                              prev.map(p => (p.id === selectedPin.id ? { ...p, boxW: val } : p))
+                            );
+                          }}
+                          className="w-full accent-[#c59b63] h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-[10px] text-stone-500 dark:text-stone-400 mb-1">
+                          <span>Height</span>
+                          <span className="font-bold text-stone-800 dark:text-white">{selectedPin.boxH}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="12"
+                          max="75"
+                          value={selectedPin.boxH}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setComponentPins(prev =>
+                              prev.map(p => (p.id === selectedPin.id ? { ...p, boxH: val } : p))
+                            );
+                          }}
+                          className="w-full accent-[#c59b63] h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Staging Method Segmented Switcher (Option A, B, C) */}
-            <div>
+            {/* Desktop Staging Method Segmented Switcher (Hidden on Mobile where 4-tab Footer is used) */}
+            <div className="hidden lg:block">
               <div className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2">
                 Staging Method
               </div>
               <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                 <button
-                  onClick={() => setActiveOption('C')}
+                  onClick={() => {
+                    setActiveOption('C');
+                    setMobileFooterTab('C');
+                  }}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'C'
                       ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
@@ -1792,7 +2395,10 @@ export default function CustomerStudio({
                 </button>
 
                 <button
-                  onClick={() => setActiveOption('A')}
+                  onClick={() => {
+                    setActiveOption('A');
+                    setMobileFooterTab('A');
+                  }}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'A'
                       ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
@@ -1804,7 +2410,10 @@ export default function CustomerStudio({
                 </button>
 
                 <button
-                  onClick={() => setActiveOption('B')}
+                  onClick={() => {
+                    setActiveOption('B');
+                    setMobileFooterTab('B');
+                  }}
                   className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'B'
                       ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
@@ -1817,165 +2426,286 @@ export default function CustomerStudio({
               </div>
             </div>
 
-            {/* TAB CONTENT C: UPLOAD PHOTO REFERENCE */}
+            {/* SECTION 2 (TAB CONTENT C): UPLOAD PHOTO REFERENCE (Dual Input Cards + Always-Visible AI Cloning Mode Cards) */}
             {activeOption === 'C' && (
-              <div className="space-y-3">
-                <p className="text-xs text-stone-500 dark:text-stone-400">
-                  Upload or snap any real furniture piece or surface tile to clone onto the spot:
-                </p>
-
+              <div className={`${mobileFooterTab === 'C' ? 'block' : 'hidden'} lg:block space-y-2.5`}>
+                
+                {/* Dual Input Cards (Upload from Gallery + Snap with Camera) or Attached Preview */}
                 {uploadedReferenceBase64 ? (
-                  <div className="space-y-2">
-                    <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-between gap-3 shadow-sm">
-                      <div className="flex items-center gap-2.5 overflow-hidden">
-                        <img
-                          src={uploadedReferenceBase64}
-                          alt="Ref"
-                          className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm shrink-0"
-                        />
-                        <div className="overflow-hidden">
-                          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 block">
-                            REFERENCE ATTACHED
-                          </span>
-                          <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate block">
-                            {uploadedReferenceName}
-                          </span>
-                        </div>
+                  <div className="p-3 rounded-2xl bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-between gap-3 shadow-sm">
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <img
+                        src={uploadedReferenceBase64}
+                        alt="Ref"
+                        className="w-12 h-12 rounded-xl object-contain bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm shrink-0"
+                      />
+                      <div className="overflow-hidden">
+                        <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-400 block">
+                          REFERENCE ATTACHED
+                        </span>
+                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate block">
+                          {uploadedReferenceName}
+                        </span>
                       </div>
+                    </div>
 
+                    <div className="flex items-center gap-1 shrink-0">
+                      <label className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-[11px] font-bold text-stone-700 dark:text-stone-200 cursor-pointer hover:bg-stone-50 shadow-sm">
+                        Change
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const base64 = ev.target.result;
+                                setUploadedReferenceBase64(base64);
+                                setUploadedReferenceName(file.name);
+                                if (enableCushionSpec) analyzeReferenceImage(base64);
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
                       <button
+                        type="button"
                         onClick={() => {
                           setUploadedReferenceBase64(null);
                           setUploadedReferenceName('');
                           setReferenceDescription('');
                         }}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors"
                         title="Remove reference image"
                       >
                         <X size={16} />
                       </button>
                     </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {/* Card 1: Upload Furniture / Surface Photo */}
+                    <label className="p-3 rounded-2xl border-2 border-dashed border-[#c59b63]/50 dark:border-brand-500/30 bg-[#fbf8f3] dark:bg-brand-500/5 hover:bg-[#f5ede0] dark:hover:bg-brand-500/10 flex flex-col items-center justify-center text-center gap-1.5 cursor-pointer transition-all shadow-sm">
+                      <div className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-[#b0854b] shrink-0">
+                        <Upload size={16} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-extrabold text-stone-900 dark:text-stone-100 block">
+                          Upload Photo
+                        </span>
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400 block">
+                          From phone gallery
+                        </span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              const base64 = ev.target.result;
+                              setUploadedReferenceBase64(base64);
+                              setUploadedReferenceName(file.name);
+                              if (enableCushionSpec) analyzeReferenceImage(base64);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
 
-                    {/* Cushion Silhouette Specification */}
-                    <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 space-y-2">
-                      <div
-                        onClick={() => {
-                          const nextVal = !enableCushionSpec;
+                    {/* Card 2: Snap Furniture / Swatch with Camera */}
+                    <label className="p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-950/60 hover:bg-stone-100 dark:hover:bg-stone-900 flex flex-col items-center justify-center text-center gap-1.5 cursor-pointer transition-all shadow-sm">
+                      <div className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-[#b0854b] shrink-0">
+                        <Camera size={16} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-extrabold text-stone-900 dark:text-stone-100 block">
+                          Snap Furniture
+                        </span>
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400 block">
+                          Capture in store / home
+                        </span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              const base64 = ev.target.result;
+                              setUploadedReferenceBase64(base64);
+                              setUploadedReferenceName(file.name || 'Camera Reference');
+                              if (enableCushionSpec) analyzeReferenceImage(base64);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+
+                {/* Always-Visible AI Cloning Mode Cards */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                    AI Reference Cloning Mode
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRefCloningMode('exact')}
+                      className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        refCloningMode === 'exact'
+                          ? 'bg-[#fbf8f3] dark:bg-brand-950/30 border-[#c59b63] shadow-sm ring-1 ring-[#c59b63]/30'
+                          : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs font-extrabold text-stone-900 dark:text-white">
+                          Exact 1:1 Clone
+                        </span>
+                        <span className={`w-2 h-2 rounded-full ${refCloningMode === 'exact' ? 'bg-[#c59b63]' : 'bg-stone-300 dark:bg-stone-700'}`} />
+                      </div>
+                      <p className="text-[10px] text-stone-500 dark:text-stone-400 leading-snug">
+                        Preserves exact frame, cushions & upholstery
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setRefCloningMode('adaptive')}
+                      className={`p-2.5 rounded-2xl border text-left transition-all ${
+                        refCloningMode === 'adaptive'
+                          ? 'bg-[#fbf8f3] dark:bg-brand-950/30 border-[#c59b63] shadow-sm ring-1 ring-[#c59b63]/30'
+                          : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-xs font-extrabold text-stone-900 dark:text-white">
+                          Adaptive Room Fit
+                        </span>
+                        <span className={`w-2 h-2 rounded-full ${refCloningMode === 'adaptive' ? 'bg-[#c59b63]' : 'bg-stone-300 dark:bg-stone-700'}`} />
+                      </div>
+                      <p className="text-[10px] text-stone-500 dark:text-stone-400 leading-snug">
+                        Harmonizes lighting, shadows & room scale
+                      </p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Always-Visible Cushion & Silhouette Lock Card */}
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 space-y-2">
+                  <div
+                    onClick={() => {
+                      const nextVal = !enableCushionSpec;
+                      setEnableCushionSpec(nextVal);
+                      if (nextVal && !referenceDescription && uploadedReferenceBase64) {
+                        analyzeReferenceImage(uploadedReferenceBase64);
+                      }
+                    }}
+                    className="flex items-center justify-between cursor-pointer select-none"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={enableCushionSpec}
+                        onChange={(e) => {
+                          const nextVal = e.target.checked;
                           setEnableCushionSpec(nextVal);
                           if (nextVal && !referenceDescription && uploadedReferenceBase64) {
                             analyzeReferenceImage(uploadedReferenceBase64);
                           }
                         }}
-                        className="flex items-center justify-between cursor-pointer select-none"
-                      >
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={enableCushionSpec}
-                            onChange={(e) => {
-                              const nextVal = e.target.checked;
-                              setEnableCushionSpec(nextVal);
-                              if (nextVal && !referenceDescription && uploadedReferenceBase64) {
-                                analyzeReferenceImage(uploadedReferenceBase64);
-                              }
-                            }}
-                            className="rounded accent-brand-500 cursor-pointer"
-                          />
-                          <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
-                            <Sparkles size={13} className={enableCushionSpec ? "text-brand-500" : "text-stone-400"} />
-                            Cushion & Silhouette Locking
-                          </span>
-                        </div>
-                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${
-                          enableCushionSpec ? 'bg-brand-500 text-white' : 'bg-stone-200 dark:bg-stone-800 text-stone-500'
-                        }`}>
-                          {enableCushionSpec ? 'ACTIVE' : 'OPTIONAL'}
+                        className="rounded accent-[#c59b63] cursor-pointer"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+                          <Sparkles size={12} className={enableCushionSpec ? "text-[#b0854b]" : "text-stone-400"} />
+                          Cushion & Silhouette Lock
+                        </span>
+                        <span className="text-[10px] text-stone-500 dark:text-stone-400 block">
+                          AI extracts exact cushion count, legs & fabric grain
                         </span>
                       </div>
-
-                      {enableCushionSpec && (
-                        <div className="pt-2 space-y-2">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="text-stone-500">Geometry and cushion specifications:</span>
-                            {isAnalyzingRef ? (
-                              <span className="text-brand-600 font-bold animate-pulse flex items-center gap-1">
-                                <RefreshCw size={10} className="animate-spin" /> Analyzing...
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => analyzeReferenceImage(uploadedReferenceBase64)}
-                                className="text-brand-600 font-bold hover:underline"
-                              >
-                                Re-scan
-                              </button>
-                            )}
-                          </div>
-                          <textarea
-                            rows={3}
-                            value={referenceDescription}
-                            onChange={(e) => setReferenceDescription(e.target.value)}
-                            placeholder="Specify exact cushions, contours, fabric texture..."
-                            className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
-                          />
-                        </div>
-                      )}
                     </div>
+                    <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${
+                      enableCushionSpec ? 'bg-[#c59b63] text-white' : 'bg-stone-200 dark:bg-stone-800 text-stone-500'
+                    }`}>
+                      {enableCushionSpec ? 'LOCKED' : 'AUTO'}
+                    </span>
                   </div>
-                ) : (
-                  <label className="w-full py-6 px-4 rounded-2xl border-2 border-dashed border-brand-200 dark:border-brand-500/30 bg-brand-50/40 dark:bg-brand-500/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-brand-700 dark:text-brand-300 font-bold text-xs flex flex-col items-center justify-center gap-2 cursor-pointer transition-all shadow-sm">
-                    <div className="w-10 h-10 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-brand-600">
-                      <Upload size={18} />
+
+                  {enableCushionSpec && (
+                    <div className="pt-1.5 border-t border-stone-200/70 dark:border-stone-800 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-stone-500 font-semibold">Custom geometry / material notes:</span>
+                        {uploadedReferenceBase64 && (
+                          isAnalyzingRef ? (
+                            <span className="text-[#b0854b] font-bold animate-pulse flex items-center gap-1">
+                              <RefreshCw size={10} className="animate-spin" /> Scanning...
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => analyzeReferenceImage(uploadedReferenceBase64)}
+                              className="text-[#b0854b] font-bold hover:underline"
+                            >
+                              AI Extract
+                            </button>
+                          )
+                        )}
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={referenceDescription}
+                        onChange={(e) => setReferenceDescription(e.target.value)}
+                        placeholder="e.g. 3-seater low-profile bouclé sofa, 2 back cushions, walnut plinth base..."
+                        className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl p-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-[#c59b63]"
+                      />
                     </div>
-                    <span>Select Reference Furniture Photo</span>
-                    <span className="text-[10px] text-stone-400 font-normal">PNG, JPG or WebP up to 10MB</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            const base64 = ev.target.result;
-                            setUploadedReferenceBase64(base64);
-                            setUploadedReferenceName(file.name);
-                            if (enableCushionSpec) {
-                              analyzeReferenceImage(base64);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
-            {/* TAB CONTENT A: SHOWROOM CATALOG */}
+            {/* SECTION 3 (TAB CONTENT A): SHOWROOM CATALOG */}
             {activeOption === 'A' && (
-              <div className="space-y-3">
-                {/* Search & Category Pills */}
+              <div className={`${mobileFooterTab === 'A' ? 'block' : 'hidden'} lg:block space-y-2.5`}>
+                {/* Catalog Header + Search & Category Pills */}
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={catalogSearch}
-                    onChange={(e) => setCatalogSearch(e.target.value)}
-                    placeholder="Search catalog pieces, fabrics, marble..."
-                    className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
-                  />
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="lg:hidden text-sm font-extrabold text-stone-900 dark:text-stone-100 shrink-0">
+                      Catalog
+                    </h3>
+                    <input
+                      type="text"
+                      value={catalogSearch}
+                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      placeholder="Search luxury sofas, tables..."
+                      className="flex-1 w-full bg-stone-100/80 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-full px-3.5 py-1.5 sm:py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
+                    />
+                  </div>
 
-                  <div className="flex gap-1.5 overflow-x-auto pb-1">
+                  <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
                     {['all', 'sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].map((cat) => (
                       <button
                         key={cat}
                         onClick={() => setActiveCatalogCategory(cat)}
-                        className={`px-3 py-1 rounded-lg text-[10px] font-bold capitalize transition-colors shrink-0 ${
+                        className={`px-3 py-1 rounded-full text-[11px] font-bold capitalize transition-colors shrink-0 border ${
                           activeCatalogCategory === cat
-                            ? 'bg-brand-500 text-white shadow-sm'
-                            : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200'
+                            ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-white border-[#b0854b] shadow-sm'
+                            : 'bg-stone-100/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200/70 dark:border-stone-700 hover:bg-stone-200'
                         }`}
                       >
                         {cat === 'all' ? 'All' : `${cat}s`}
@@ -1984,50 +2714,47 @@ export default function CustomerStudio({
                   </div>
                 </div>
 
-                {/* Items Grid */}
+                {/* Items 2-Column Grid (Mobile & Desktop) */}
                 {filteredCatalog.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
+                  <div className="p-4 text-center text-xs text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                     No matching pieces found. Try switching categories or clearing search.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2.5 max-h-[280px] lg:max-h-[380px] overflow-y-auto pr-1">
+                  <div className="grid grid-cols-2 gap-2.5 lg:max-h-[380px] lg:overflow-y-auto pb-1 lg:pr-1">
                     {filteredCatalog.map((item) => {
                       const isSel = selectedCatalogItem?.id === item.id;
                       return (
                         <div
                           key={item.id}
                           onClick={() => setSelectedCatalogItem(item)}
-                          className={`p-2.5 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer group ${
+                          className={`p-2 rounded-2xl border flex flex-col justify-between transition-all cursor-pointer group ${
                             isSel
-                              ? 'bg-brand-50/80 dark:bg-brand-950/30 border-brand-500 shadow-md ring-2 ring-brand-500/20'
+                              ? 'bg-[#f7f5f0] dark:bg-brand-950/30 border-[#b0854b] shadow-md ring-2 ring-brand-500/20'
                               : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700'
                           }`}
                         >
-                          <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 mb-2">
+                          <div className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 dark:bg-stone-800 mb-1.5 shrink-0">
                             <img
                               src={item.imageUrl}
                               alt={item.name}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                             {isSel && (
-                              <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-md">
+                              <div className="flex absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white items-center justify-center shadow-md">
                                 <Check size={12} strokeWidth={3} />
                               </div>
                             )}
                             <div
-                              className="absolute bottom-1.5 left-1.5 w-3 h-3 rounded-full border border-white shadow-sm"
+                              className="absolute bottom-1.5 left-1.5 w-2.5 h-2.5 rounded-full border border-white shadow-sm"
                               style={{ backgroundColor: item.color || '#c59b63' }}
                             />
                           </div>
 
-                          <div>
+                          <div className="min-w-0 px-0.5">
                             <div className="text-[11px] font-extrabold text-stone-900 dark:text-white truncate">
                               {item.name}
                             </div>
-                            <div className="text-[10px] text-stone-400 truncate">
-                              {item.material || 'Architectural Grade'}
-                            </div>
-                            <div className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+                            <div className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5">
                               ${Number(item.price || 0).toLocaleString()}
                             </div>
                           </div>
@@ -2039,83 +2766,453 @@ export default function CustomerStudio({
               </div>
             )}
 
-            {/* TAB CONTENT B: AI TEXT PROMPT */}
+            {/* SECTION 4 (TAB CONTENT B): AI PROMPT (Mode 1: Change Furniture | Mode 2: Full Flat Redesign) */}
             {activeOption === 'B' && (
-              <div className="space-y-3">
-                <textarea
-                  rows={3}
-                  value={customPromptText}
-                  onChange={(e) => setCustomPromptText(e.target.value)}
-                  placeholder="Describe your desired furniture, fabric upholstery, marble vein texture, or wood grain..."
-                  className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 resize-none shadow-sm leading-relaxed"
-                />
+              <div className={`${mobileFooterTab === 'B' ? 'block' : 'hidden'} lg:block space-y-2.5`}>
+                
+                {/* 2-Mode Switcher: Change Furniture vs Full Flat Redesign */}
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-stone-100 dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800">
+                  <button
+                    type="button"
+                    onClick={() => setAiPromptSubMode('furniture')}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                      aiPromptSubMode === 'furniture'
+                        ? 'bg-white dark:bg-stone-900 text-[#9c733b] dark:text-[#d9b37c] shadow-sm border border-[#c59b63]/50'
+                        : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                    }`}
+                  >
+                    <Sparkles size={13} />
+                    <span>Change Furniture</span>
+                  </button>
 
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-                    Curated Luxury Prompts:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      'Curved bouclé sofa with brushed brass legs',
-                      'Italian cognac full-grain leather Chesterfield',
-                      'Calacatta marble tiles with subtle gold veins',
-                      'Warm honey oak herringbone wood parquet flooring',
-                      'Minimalist matte black steel arc lamp'
-                    ].map((chip, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCustomPromptText(chip)}
-                        className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-semibold transition-colors"
-                      >
-                        ✨ {chip}
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAiPromptSubMode('full_flat')}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                      aiPromptSubMode === 'full_flat'
+                        ? 'bg-white dark:bg-stone-900 text-[#9c733b] dark:text-[#d9b37c] shadow-sm border border-[#c59b63]/50'
+                        : 'text-stone-600 dark:text-stone-400 hover:text-stone-900'
+                    }`}
+                  >
+                    <Layers size={13} />
+                    <span>Full Flat Redesign</span>
+                  </button>
                 </div>
+
+                {aiPromptSubMode === 'furniture' ? (
+                  /* MODE 1: CHANGE SINGLE FURNITURE SPOT WITH AI PROMPT */
+                  <div className="space-y-2.5">
+                    {/* Minimal Style Presets (4 Cards) */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                        Style Presets
+                      </span>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { label: 'Japandi', swatch: '#c9b18c', prompt: 'Low-profile Japandi natural warm oak and organic linen bouclé furniture piece' },
+                          { label: 'Luxury', swatch: '#c59b63', prompt: 'Bespoke Italian quiet-luxury curved ivory bouclé piece with brushed brass accents' },
+                          { label: 'Minimal', swatch: '#948e85', prompt: 'Ultra-clean architectural minimalist piece in warm monolithic travertine and matte finish' },
+                          { label: 'Modern', swatch: '#8b5a2b', prompt: 'Contemporary loft full-grain cognac leather piece with warm walnut and matte black steel' }
+                        ].map((preset) => {
+                          const isActPreset = customPromptText.includes(preset.label) || customPromptText === preset.prompt;
+                          return (
+                            <button
+                              key={preset.label}
+                              type="button"
+                              onClick={() => setCustomPromptText(preset.prompt)}
+                              className={`p-2 rounded-xl border text-center flex flex-col items-center gap-1 transition-all ${
+                                isActPreset
+                                  ? 'bg-[#fbf8f3] dark:bg-brand-950/30 border-[#c59b63] shadow-sm'
+                                  : 'bg-stone-50/80 dark:bg-stone-950/50 border-stone-200/80 dark:border-stone-800 hover:bg-white'
+                              }`}
+                            >
+                              <span
+                                className="w-4 h-4 rounded-full border border-white shadow-sm"
+                                style={{ backgroundColor: preset.swatch }}
+                              />
+                              <span className="text-[10px] font-extrabold text-stone-800 dark:text-stone-200">
+                                {preset.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Material & Finish Quick-Add Tags */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                        Material & Finish Quick-Add
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          'Ivory Bouclé',
+                          'Cognac Leather',
+                          'Honed Travertine',
+                          'Warm Walnut',
+                          'Brushed Brass',
+                          'Calacatta Marble',
+                          'Olive Velvet',
+                          'Herringbone Oak'
+                        ].map((tag) => {
+                          const hasTag = customPromptText.toLowerCase().includes(tag.toLowerCase());
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => {
+                                if (!customPromptText.trim()) {
+                                  setCustomPromptText(`${tag} ${selectedPin?.category || 'furniture piece'}`);
+                                } else if (!hasTag) {
+                                  setCustomPromptText(`${customPromptText.trim().replace(/\.$/, '')}, crafted with ${tag}`);
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                                hasTag
+                                  ? 'bg-[#c59b63] text-white border-[#c59b63]'
+                                  : 'bg-stone-100/90 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-stone-200'
+                              }`}
+                            >
+                              + {tag}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Furniture Prompt Composer */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400">
+                          Furniture Prompt ({selectedPin?.name || 'Active Spot'})
+                        </span>
+                        {customPromptText && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomPromptText('')}
+                            className="text-[10px] font-bold text-stone-400 hover:text-rose-500"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={customPromptText}
+                        onChange={(e) => setCustomPromptText(e.target.value)}
+                        placeholder="Describe your desired furniture, fabric upholstery, marble vein texture, or wood grain..."
+                        className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-2xl p-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-[#c59b63] resize-none shadow-sm leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* MODE 2: FULL FLAT / ROOM REDESIGN BUILDER (Empty or Furnished Flat) */
+                  <div className="space-y-2.5">
+                    
+                    {/* Flat Condition + Quick Upload Flat Photo Strip */}
+                    <div className="p-2.5 rounded-2xl bg-[#fbf8f3] dark:bg-stone-950 border border-[#c59b63]/40 dark:border-stone-800 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8c6430] dark:text-[#d9b37c]">
+                          1. Your Flat Condition
+                        </span>
+                        <label
+                          onClick={(e) => {
+                            if (!currentUser) {
+                              e.preventDefault();
+                              if (onRequireAuth) onRequireAuth();
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-white dark:bg-stone-800 border border-[#c59b63]/50 text-[10px] font-extrabold text-[#9c733b] dark:text-[#d9b37c] flex items-center gap-1 cursor-pointer shadow-sm"
+                        >
+                          <Upload size={11} />
+                          <span>{currentRoomUrl ? 'Change Flat Photo' : 'Upload Flat Photo'}</span>
+                          {currentUser && (
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  const reader = new FileReader();
+                                  reader.onload = (ev) => loadRoomImage(ev.target.result, file.name.replace(/\.[^/.]+$/, ""));
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                            />
+                          )}
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setFlatState('empty')}
+                          className={`py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all ${
+                            flatState === 'empty'
+                              ? 'bg-[#c59b63] text-white border-[#c59b63] shadow-sm'
+                              : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800'
+                          }`}
+                        >
+                          Empty Flat / Shell
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFlatState('furnished')}
+                          className={`py-1.5 px-2.5 rounded-xl text-[11px] font-bold border transition-all ${
+                            flatState === 'furnished'
+                              ? 'bg-[#c59b63] text-white border-[#c59b63] shadow-sm'
+                              : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800'
+                          }`}
+                        >
+                          Furnished (Redesign All)
+                        </button>
+                      </div>
+
+                      {/* Room Type Selector Pills */}
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+                        {['Living Room', 'Master Bedroom', 'Dining Space', 'Open Studio', 'Home Office'].map((rt) => (
+                          <button
+                            key={rt}
+                            type="button"
+                            onClick={() => setFlatRoomType(rt)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 border transition-all ${
+                              flatRoomType === rt
+                                ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
+                                : 'bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800'
+                            }`}
+                          >
+                            {rt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 2. Design Style Templates (2-Column Grid) */}
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                        2. Architectural Style Template
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {FLAT_STYLE_TEMPLATES.map((tpl) => {
+                          const isSelStyle = flatStyle === tpl.id;
+                          return (
+                            <button
+                              key={tpl.id}
+                              type="button"
+                              onClick={() => setFlatStyle(tpl.id)}
+                              className={`p-2 rounded-xl border text-left transition-all flex items-start gap-2 ${
+                                isSelStyle
+                                  ? 'bg-[#fbf8f3] dark:bg-brand-950/30 border-[#c59b63] shadow-sm ring-1 ring-[#c59b63]/30'
+                                  : 'bg-white dark:bg-stone-950/40 border-stone-200 dark:border-stone-800 hover:border-stone-300'
+                              }`}
+                            >
+                              <span
+                                className="w-3.5 h-3.5 rounded-full border border-white shadow-sm shrink-0 mt-0.5"
+                                style={{ backgroundColor: tpl.swatch }}
+                              />
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-extrabold text-stone-900 dark:text-white truncate">
+                                  {tpl.label}
+                                </div>
+                                <div className="text-[9px] text-stone-500 dark:text-stone-400 line-clamp-1">
+                                  {tpl.desc}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3. Furniture Density & Lighting Mood */}
+                    <div className="grid grid-cols-1 gap-2 pt-0.5">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                          3. Furniture Density
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {['Minimal & Airy', 'Balanced Living', 'Plush & Full'].map((dens) => (
+                            <button
+                              key={dens}
+                              type="button"
+                              onClick={() => setFlatDensity(dens)}
+                              className={`py-1.5 px-2 rounded-xl text-[10px] font-bold border transition-all ${
+                                flatDensity === dens
+                                  ? 'bg-[#c59b63] text-white border-[#c59b63] shadow-sm'
+                                  : 'bg-stone-50 dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800'
+                              }`}
+                            >
+                              {dens}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-400 block">
+                          4. Lighting & Color Mood
+                        </span>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                          {['Sunlit Warm Ivory', 'Golden Hour Cozy', 'Crisp Gallery Neutral', 'Moody Espresso & Brass'].map((mood) => (
+                            <button
+                              key={mood}
+                              type="button"
+                              onClick={() => setFlatLighting(mood)}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 border transition-all ${
+                                flatLighting === mood
+                                  ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100'
+                                  : 'bg-stone-50 dark:bg-stone-900 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800'
+                              }`}
+                            >
+                              {mood}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Optional Extra Custom Note */}
+                    <input
+                      type="text"
+                      value={flatCustomNotes}
+                      onChange={(e) => setFlatCustomNotes(e.target.value)}
+                      placeholder="Optional note (e.g. add indoor olive tree, L-shaped sofa, fluted wood TV wall)..."
+                      className="w-full bg-stone-50 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-[#c59b63]"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
 
           {/* =========================================================================
-              STICKY PRIMARY ACTION BAR ("Stage Room" Button)
+              STICKY PRIMARY ACTION BAR ("Stage Room" / "Redesign Flat" Button)
               ========================================================================= */}
-          <div className="p-4 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 sticky bottom-0 z-30 shadow-xl space-y-2">
-            {!currentUser ? (
-              <button
-                onClick={() => onRequireAuth && onRequireAuth()}
-                className="w-full py-4 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-sm shadow-xl shadow-brand-500/25 flex items-center justify-center gap-2 transition-all"
-              >
-                <LogIn size={18} />
-                <span>Sign In to Stage Rooms (Get 100 Free Credits)</span>
-              </button>
-            ) : !hasCredits ? (
-              <div className="space-y-1">
+          <div className="bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 lg:sticky lg:bottom-0 z-30 shadow-xl shrink-0">
+            
+            {/* Stage CTA Button Area */}
+            <div className="px-3.5 py-2 sm:p-4">
+              {!currentUser ? (
                 <button
-                  disabled
-                  className="w-full py-4 rounded-2xl bg-stone-300 dark:bg-stone-800 text-stone-500 dark:text-stone-400 font-extrabold text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+                  onClick={() => onRequireAuth && onRequireAuth()}
+                  className="w-full py-2.5 sm:py-3.5 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-brand-500/25 flex items-center justify-center gap-2 transition-all"
                 >
-                  <Lock size={16} />
-                  <span>Insufficient AI Credits (0 Available)</span>
+                  <LogIn size={16} />
+                  <span>Sign In to Stage Rooms (Get 100 Free Credits)</span>
                 </button>
-                <p className="text-[10px] text-center text-rose-500 font-semibold">
-                  You need 2 credits to stage a room. Contact admin or top up credits.
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={executeAIStaging}
-                disabled={isAILoading || !currentRoomUrl}
-                className="w-full py-4 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-extrabold text-sm shadow-xl shadow-brand-500/25 flex items-center justify-center gap-2 transition-all transform active:scale-98 disabled:opacity-40"
-              >
-                <Sparkles size={18} />
-                <span>
-                  Stage {selectedPin?.name || 'Spot'} ({activeOption === 'C' ? 'Photo Clone' : activeOption === 'A' ? selectedCatalogItem?.name || 'Catalog' : 'Custom Prompt'})
-                </span>
-                <span className="text-xs opacity-80 font-normal ml-1">• 2 Credits</span>
-              </button>
-            )}
+              ) : !hasCredits ? (
+                <div className="space-y-1">
+                  <button
+                    disabled
+                    className="w-full py-2.5 sm:py-3.5 rounded-2xl bg-stone-300 dark:bg-stone-800 text-stone-500 dark:text-stone-400 font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+                  >
+                    <Lock size={15} />
+                    <span>Insufficient AI Credits (0 Available)</span>
+                  </button>
+                  <p className="text-[10px] text-center text-rose-500 font-semibold">
+                    You need 2 credits to stage a room. Contact admin or top up credits.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={executeAIStaging}
+                  disabled={isAILoading || !currentRoomUrl}
+                  className="w-full py-2.5 sm:py-3.5 px-4 rounded-full sm:rounded-2xl bg-gradient-to-r from-[#c59b63] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] active:scale-[0.99] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
+                >
+                  <Sparkles size={16} className="shrink-0" />
+                  <span className="truncate">
+                    {activeOption === 'B' && aiPromptSubMode === 'full_flat'
+                      ? `Redesign Full ${flatRoomType} (${flatStyle.split(' ')[0]})`
+                      : `Stage ${selectedPin?.name || 'Spot'}`}
+                  </span>
+                  <span className="text-xs opacity-90 font-semibold shrink-0">• 2 Credits</span>
+                </button>
+              )}
+            </div>
           </div>
         </aside>
+
+        {/* =========================================================================
+            4-SECTION MOBILE FOOTER NAVIGATION BAR (Pinned Fixed Bottom-0 on All Mobile Viewports)
+            ========================================================================= */}
+        <nav
+          aria-label="Studio Tools Footer"
+          className="lg:hidden fixed bottom-0 inset-x-0 h-14 z-50 grid grid-cols-4 border-t border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-950 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]"
+        >
+          <button
+            type="button"
+            onClick={() => setMobileFooterTab('spot')}
+            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+              mobileFooterTab === 'spot'
+                ? 'text-[#b0854b] dark:text-brand-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'spot' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+            )}
+            <Crosshair size={18} strokeWidth={mobileFooterTab === 'spot' ? 2.4 : 1.8} />
+            <span>Target Spot</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveOption('C');
+              setMobileFooterTab('C');
+            }}
+            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+              mobileFooterTab === 'C'
+                ? 'text-[#b0854b] dark:text-brand-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'C' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+            )}
+            <Camera size={18} strokeWidth={mobileFooterTab === 'C' ? 2.4 : 1.8} />
+            <span>Photo Ref</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveOption('A');
+              setMobileFooterTab('A');
+            }}
+            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+              mobileFooterTab === 'A'
+                ? 'text-[#b0854b] dark:text-brand-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'A' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+            )}
+            <Store size={18} strokeWidth={mobileFooterTab === 'A' ? 2.4 : 1.8} />
+            <span>Catalog</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveOption('B');
+              setMobileFooterTab('B');
+            }}
+            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+              mobileFooterTab === 'B'
+                ? 'text-[#b0854b] dark:text-brand-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'B' && (
+              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+            )}
+            <Sparkles size={18} strokeWidth={mobileFooterTab === 'B' ? 2.4 : 1.8} />
+            <span>AI Prompt</span>
+          </button>
+        </nav>
       </main>
 
       {/* =========================================================================
