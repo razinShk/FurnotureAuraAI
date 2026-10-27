@@ -33,7 +33,9 @@ import {
   FolderHeart,
   ZoomIn,
   Crosshair,
-  MoreHorizontal
+  MoreHorizontal,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import CameraCaptureModal from '../components/CameraCaptureModal';
 import RoomQuoteModal from '../components/RoomQuoteModal';
@@ -111,6 +113,9 @@ export default function CustomerStudio({
   const [isRecentCreationsOpen, setIsRecentCreationsOpen] = useState(false);
   const [isMobileHeaderMenuOpen, setIsMobileHeaderMenuOpen] = useState(false);
   const [isCanvasMoreOpen, setIsCanvasMoreOpen] = useState(false);
+  const [isFullscreenPreviewOpen, setIsFullscreenPreviewOpen] = useState(false);
+  const [isFullscreenPeeking, setIsFullscreenPeeking] = useState(false);
+  const fullscreenTouchStartXRef = useRef(null);
 
   // Room Image & Pin State
   const [currentRoomUrl, setCurrentRoomUrl] = useState(null);
@@ -1679,6 +1684,20 @@ export default function CustomerStudio({
                     style={fittedCanvasStyle}
                   />
 
+                  {/* Ultra-Light Fullscreen Preview Button (Top-Right of Image) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsFullscreenPreviewOpen(true);
+                    }}
+                    title="View full screen image"
+                    aria-label="View full screen image"
+                    className="absolute top-2.5 right-2.5 z-40 w-8 h-8 rounded-full bg-white/40 hover:bg-white/75 dark:bg-black/30 dark:hover:bg-black/60 backdrop-blur-md border border-white/50 dark:border-white/20 text-stone-800 dark:text-white flex items-center justify-center shadow-sm transition-all active:scale-95 pointer-events-auto"
+                  >
+                    <Maximize2 size={14} strokeWidth={1.8} />
+                  </button>
+
                   {/* Before Overlay for Split Comparison */}
                   <div
                     className={`absolute inset-0 overflow-hidden pointer-events-none border-r-2 border-brand-500 z-20 ${
@@ -3216,6 +3235,187 @@ export default function CustomerStudio({
           </button>
         </nav>
       </main>
+
+      {/* =========================================================================
+          FULLSCREEN ROOM IMAGE PREVIEW LIGHTBOX MODAL
+          ========================================================================= */}
+      {isFullscreenPreviewOpen && currentRoomUrl && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-2 sm:p-6 select-none animate-fadeIn"
+          onClick={() => {
+            setIsFullscreenPreviewOpen(false);
+            setIsFullscreenPeeking(false);
+          }}
+        >
+          {/* Ultra-light Floating Top Bar */}
+          <div
+            className="absolute top-3 sm:top-5 inset-x-3 sm:inset-x-6 z-20 flex items-center justify-between pointer-events-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Version & Resolution Badge */}
+            <div className="flex items-center gap-1.5 pointer-events-auto bg-white/10 backdrop-blur-md border border-white/15 rounded-full px-3 py-1.5 text-white/90 text-xs">
+              <span className="font-semibold truncate max-w-[140px] sm:max-w-xs">
+                {versionHistory[activeVersionIndex]?.label || roomTitle}
+              </span>
+              {versionHistory.length > 1 && (
+                <span className="text-[10px] text-[#e0bc85] font-bold pl-1 border-l border-white/15">
+                  {activeVersionIndex + 1}/{versionHistory.length}
+                </span>
+              )}
+              {imageDimensions.width > 0 && (
+                <span className="hidden sm:inline text-[10px] text-white/60 font-mono pl-1 border-l border-white/15">
+                  {imageDimensions.width}×{imageDimensions.height}
+                </span>
+              )}
+            </div>
+
+            {/* Right Controls: Hold to Peek Original (if v2+) + Download + Close */}
+            <div className="flex items-center gap-2 pointer-events-auto">
+              {versionHistory.length > 1 && (
+                <button
+                  type="button"
+                  onMouseDown={() => setIsFullscreenPeeking(true)}
+                  onMouseUp={() => setIsFullscreenPeeking(false)}
+                  onMouseLeave={() => setIsFullscreenPeeking(false)}
+                  onTouchStart={() => setIsFullscreenPeeking(true)}
+                  onTouchEnd={() => setIsFullscreenPeeking(false)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md border transition-all flex items-center gap-1.5 ${
+                    isFullscreenPeeking
+                      ? 'bg-[#c59b63] text-white border-[#c59b63]'
+                      : 'bg-white/10 hover:bg-white/20 text-white/90 border-white/15'
+                  }`}
+                  title="Hold to compare with Original Room (v1)"
+                >
+                  <Eye size={13} />
+                  <span>{isFullscreenPeeking ? 'Showing v1 Original' : 'Hold for v1'}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={downloadHDDesign}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/15 text-white flex items-center justify-center transition-all"
+                title="Download Image"
+                aria-label="Download Image"
+              >
+                <Download size={15} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsFullscreenPreviewOpen(false);
+                  setIsFullscreenPeeking(false);
+                }}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all"
+                title="Close Fullscreen"
+                aria-label="Close Fullscreen"
+              >
+                <X size={17} />
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen Image Container (Supports Touch Swipe Left/Right to Slide Between Versions) */}
+          <div
+            className="relative w-full h-full flex items-center justify-center overflow-hidden py-12 sm:py-14"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              if (e.touches && e.touches.length === 1) {
+                fullscreenTouchStartXRef.current = e.touches[0].clientX;
+              }
+            }}
+            onTouchEnd={(e) => {
+              if (fullscreenTouchStartXRef.current === null || versionHistory.length <= 1) return;
+              const endX = e.changedTouches?.[0]?.clientX ?? fullscreenTouchStartXRef.current;
+              const deltaX = endX - fullscreenTouchStartXRef.current;
+              fullscreenTouchStartXRef.current = null;
+              if (Math.abs(deltaX) > 40) {
+                setIsFullscreenPeeking(false);
+                if (deltaX < 0 && activeVersionIndex < versionHistory.length - 1) {
+                  rollbackToVersion(activeVersionIndex + 1);
+                } else if (deltaX > 0 && activeVersionIndex > 0) {
+                  rollbackToVersion(activeVersionIndex - 1);
+                }
+              }
+            }}
+          >
+            {/* Left Slide Arrow (When multiple versions exist) */}
+            {versionHistory.length > 1 && (
+              <button
+                type="button"
+                disabled={activeVersionIndex === 0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFullscreenPeeking(false);
+                  if (activeVersionIndex > 0) rollbackToVersion(activeVersionIndex - 1);
+                }}
+                className="absolute left-2 sm:left-5 z-30 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/25 disabled:opacity-20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all active:scale-95"
+                aria-label="Previous room version"
+              >
+                <ChevronLeft size={20} />
+              </button>
+            )}
+
+            <img
+              key={isFullscreenPeeking ? 'peek-v1' : `ver-${activeVersionIndex}`}
+              src={
+                isFullscreenPeeking && versionHistory[0]?.dataUrl
+                  ? versionHistory[0].dataUrl
+                  : (versionHistory[activeVersionIndex]?.dataUrl || currentRoomUrl)
+              }
+              alt={roomTitle}
+              className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg shadow-2xl transition-all duration-200"
+            />
+
+            {/* Right Slide Arrow (When multiple versions exist) */}
+            {versionHistory.length > 1 && (
+              <button
+                type="button"
+                disabled={activeVersionIndex >= versionHistory.length - 1}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsFullscreenPeeking(false);
+                  if (activeVersionIndex < versionHistory.length - 1) rollbackToVersion(activeVersionIndex + 1);
+                }}
+                className="absolute right-2 sm:right-5 z-30 w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/10 hover:bg-white/25 disabled:opacity-20 backdrop-blur-md border border-white/20 text-white flex items-center justify-center transition-all active:scale-95"
+                aria-label="Next room version"
+              >
+                <ChevronRight size={20} />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Horizontally Slideable Version Pills Strip (if multiple versions exist) */}
+          {versionHistory.length > 1 && (
+            <div
+              className="absolute bottom-4 inset-x-0 px-3 flex items-center justify-center z-20 pointer-events-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="max-w-full overflow-x-auto no-scrollbar touch-pan-x flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15 shadow-lg">
+                {versionHistory.map((ver, idx) => (
+                  <button
+                    key={ver.id || idx}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsFullscreenPeeking(false);
+                      rollbackToVersion(idx);
+                    }}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${
+                      activeVersionIndex === idx && !isFullscreenPeeking
+                        ? 'bg-[#c59b63] text-white shadow-md scale-[1.02]'
+                        : 'text-white/75 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {ver.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* =========================================================================
           RECENT CREATIONS DRAWER / MODAL
