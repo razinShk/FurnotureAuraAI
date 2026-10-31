@@ -847,11 +847,13 @@ export default function CustomerStudio({
     } else if (activeOption === 'B') {
       itemDescription = isFullFlatMode ? composedFlatPrompt : customPromptText.trim();
     } else if (activeOption === 'D') {
-      const pieceName = furnitureTypeText || pin.name || 'furniture piece';
+      const isPureReupholster = !furnitureTypeText || furnitureTypeText === 'Original Silhouette';
       const fabricDesc = customFabricSwatchBase64
-        ? 'upholstered in custom physical fabric swatch texture'
-        : (fabricSpecText ? `upholstered in ${fabricSpecText}` : 'designer upholstery');
-      itemDescription = `${pieceName} ${fabricDesc}`;
+        ? 'custom physical fabric swatch texture'
+        : (fabricSpecText || selectedFabricId);
+      itemDescription = isPureReupholster
+        ? `Re-upholster existing ${pin.name || 'furniture piece'} in ${fabricDesc} while strictly preserving its original 3D shape and cushion geometry`
+        : `${furnitureTypeText} upholstered in ${fabricDesc}`;
     } else {
       const baseRefDesc = (enableCushionSpec && referenceDescription.trim())
         ? referenceDescription.trim()
@@ -3541,39 +3543,18 @@ export default function CustomerStudio({
                     )}
                   </div>
 
-                  {/* 1. Furniture Type / Configuration Pills */}
-                  <div className="space-y-1.5 pt-1 border-t border-amber-200/50 dark:border-stone-800">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400 block">
-                      1. Furniture Silhouette / Type ({selectedPin?.category || 'sofa'})
-                    </span>
-                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                      {(FURNITURE_TYPE_OPTIONS[selectedPin?.category || 'sofa'] || FURNITURE_TYPE_OPTIONS.sofa).map((typeOpt) => {
-                        const isSelected = selectedFurnitureType === typeOpt;
-                        return (
-                          <button
-                            key={typeOpt}
-                            type="button"
-                            onClick={() => setSelectedFurnitureType(typeOpt)}
-                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 border transition-all ${
-                              isSelected
-                                ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-sm'
-                                : 'bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:border-stone-400'
-                            }`}
-                          >
-                            {typeOpt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* 2. Fabric & Material Swatches + Custom Swatch Snap/Upload */}
+                  {/* 1. PRIMARY: Fabric & Material Swatches + Custom Swatch Snap/Upload */}
                   <div className="space-y-2 pt-1 border-t border-amber-200/50 dark:border-stone-800">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                        2. Upholstery Fabric & Material Finish
-                      </span>
-                      <div className="flex items-center gap-1.5">
+                      <div>
+                        <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 dark:text-amber-200 block">
+                          1. Choose Fabric / Material Finish
+                        </span>
+                        <span className="text-[9px] text-stone-500 dark:text-stone-400">
+                          Select a fabric below to re-upholster your {selectedPin?.name || 'sofa'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
                           onClick={() => setIsSwatchCameraOpen(true)}
@@ -3624,7 +3605,7 @@ export default function CustomerStudio({
                               Custom Swatch: {customFabricSwatchName || 'In-Store Fabric'}
                             </div>
                             <div className="text-[9px] text-amber-700 dark:text-amber-300 font-semibold">
-                              Flux-2 Klein 4B will wrap the furniture in this exact material texture
+                              Flux-2 Klein 4B will wrap your existing sofa in this exact material
                             </div>
                           </div>
                         </div>
@@ -3666,6 +3647,47 @@ export default function CustomerStudio({
                               style={{ backgroundColor: fab.swatch }}
                             />
                             <span className="truncate">{fab.label || fab.id}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. SECONDARY / OPTIONAL: Furniture Silhouette / Layout */}
+                  <div className="space-y-1.5 pt-2 border-t border-amber-200/50 dark:border-stone-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400 block">
+                        2. Change Silhouette / Layout (Optional)
+                      </span>
+                      {selectedFurnitureType !== 'Original Silhouette' && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFurnitureType('Original Silhouette')}
+                          className="text-[10px] font-bold text-amber-600 hover:underline"
+                        >
+                          Keep Original Silhouette
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-stone-500 dark:text-stone-400">
+                      By default, your sofa&apos;s original shape is preserved. Select below only if you want to change its configuration:
+                    </p>
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                      {(FURNITURE_TYPE_OPTIONS[selectedPin?.category || 'sofa'] || FURNITURE_TYPE_OPTIONS.sofa).map((typeOpt) => {
+                        const isSelected = selectedFurnitureType === typeOpt;
+                        const isOriginal = typeOpt === 'Original Silhouette';
+                        return (
+                          <button
+                            key={typeOpt}
+                            type="button"
+                            onClick={() => setSelectedFurnitureType(typeOpt)}
+                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 border transition-all ${
+                              isSelected
+                                ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                                : 'bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:border-stone-400'
+                            }`}
+                          >
+                            {isOriginal ? '✨ Keep Original Shape' : typeOpt}
                           </button>
                         );
                       })}
@@ -3758,7 +3780,9 @@ export default function CustomerStudio({
                     {activeOption === 'B' && aiPromptSubMode === 'full_flat'
                       ? `Redesign Full ${flatRoomType} (${flatStyle.split(' ')[0]})`
                       : activeOption === 'D'
-                      ? `Stage ${selectedFurnitureType !== 'Original Silhouette' ? selectedFurnitureType : (selectedPin?.name || 'Spot')}`
+                      ? (selectedFurnitureType === 'Original Silhouette'
+                          ? `Re-upholster ${selectedPin?.name || 'Sofa'} in ${selectedFabricId}`
+                          : `Stage ${selectedFurnitureType} in ${selectedFabricId}`)
                       : `Stage ${selectedPin?.name || 'Spot'}`}
                   </span>
                   <span className="px-1.5 py-0.5 rounded-md bg-black/20 text-[10px] font-black shrink-0">

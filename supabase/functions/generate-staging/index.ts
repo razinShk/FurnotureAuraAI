@@ -83,6 +83,36 @@ LIGHTING & PERSPECTIVE INTEGRATION:
   }
 
   // Text-based, catalog prompt, or Type & Fabric staging (Option B or D)
+  const isPureReupholster = Boolean((fabricSpec || hasFabricSwatchImage) && (!furnitureTypeSpec || furnitureTypeSpec === "Original Silhouette"));
+  
+  if (isPureReupholster) {
+    const swatchDesc = hasFabricSwatchImage
+      ? "the exact material texture, pattern weave, and color of the attached fabric swatch image"
+      : fabricSpec;
+
+    return `Task: Surgical in-place furniture re-upholstery.
+
+PRIMARY INPUT:
+- Image 1 is the authentic room photograph containing the target ${pinName} at ${positionDesc}.
+
+PRESERVATION OF EXISTING FURNITURE SHAPE & GEOMETRY:
+- Keep the EXACT original 3D silhouette, geometry, cushion division, armrest contours, backrest, legs, and proportions of the ${pinName} in Image 1.
+- Do NOT replace the piece with a different shape or model.
+- Only RE-UPHOLSTER the surface material of this existing piece into: ${swatchDesc}.
+- Preserve all structural stitching, natural fabric folds, and lighting bounce from the room.
+
+STRICT ROOM PRESERVATION MANDATE:
+- Image 1 is the REAL ROOM ENVIRONMENT. Preserve 100% of Image 1: identical architectural layout, walls, paint finish, flooring, ceiling, light fixtures/chandeliers, windows, doors, and camera perspective.
+- Do NOT alter any part of the room outside the designated furniture position.
+- Do NOT hallucinate or add new architectural features, windows, rugs, or walls that do not exist in Image 1.
+- ${preservedItemsText}
+- All modifications must be STRICTLY and EXCLUSIVELY confined to the surface of the target ${pinName} at ${positionDesc}.
+
+LIGHTING & PERSPECTIVE INTEGRATION:
+- Seamlessly blend the new fabric texture into Image 1 using Image 1's existing ambient room lighting, color temperature, and realistic floor contact shadows.
+- Strictly preserve Image 1's exact camera framing, orientation, and perspective.`;
+  }
+
   const furnitureDescription = prompt || (furnitureTypeSpec ? `${furnitureTypeSpec} upholstered in ${fabricSpec || "designer fabric"}` : pinName);
 
   return `Task: Surgical in-room furniture placement.
