@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-replicate-key",
 };
 
+const QWEN_VERSION = "bf57361c75677fc33d480d0c5f02926e621b2caa2000347cb74aeae9d2ca07ee";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -39,34 +41,36 @@ serve(async (req) => {
       formattedImage = `data:${mimeType};base64,${imageBase64}`;
     }
 
-    // Call Replicate model google/gemini-2.5-flash
-    const repRes = await fetch("https://api.replicate.com/v1/models/google/gemini-2.5-flash/predictions", {
+    // Call Replicate model lucataco/qwen2-vl-7b-instruct
+    const repRes = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${repKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        version: QWEN_VERSION,
         input: {
-          prompt: `You are an elite interior architecture and furniture spatial analyzer.
-Analyze this room photo and detect 6 to 8 main visible components (sofas, coffee tables, accent chairs, flooring/tiles, walls, lamps).
-Return ONLY a valid JSON object with keys:
-- "roomVibe": short description of interior design aesthetic
-- "lightingConditions": short description of ambient lighting
-- "palette": array of 4 dominant hex colors
-- "components": array of objects with keys:
-  - "name": descriptive name (e.g. "Living Room Bouclé Sofa", "Center Coffee Table", "Hardwood Herringbone Floor", "Accent Wall Surface", "Floor Lamp")
-  - "category": one of ["sofa", "table", "chair", "floor", "wall", "lamp", "rug", "decor"]
-  - "x": horizontal center percentage from left (8 to 92)
-  - "y": vertical center percentage from top (8 to 92)
-  - "width": bounding box width percentage (15 to 80)
-  - "height": bounding box height percentage (14 to 65)
-  - "styleSuggestion": a 1-sentence luxury furniture pairing recommendation
-
-Output strictly valid JSON only without markdown or code fences.`,
-          images: [formattedImage],
-          temperature: 0.2,
-          thinking_budget: 0,
+          media: formattedImage,
+          prompt: `Analyze this room photo and detect 6 to 8 main visible furniture pieces and components (sofas, tables, chairs, flooring, walls, lamps).
+Return strictly valid JSON only:
+{
+  "roomVibe": "short description of style",
+  "lightingConditions": "short description of lighting",
+  "palette": ["#F5F5F5", "#333333", "#C19A6B", "#1B4D3E"],
+  "components": [
+    {
+      "name": "descriptive name (e.g. Modern Leather Sofa)",
+      "category": "sofa",
+      "x": 50,
+      "y": 55,
+      "width": 45,
+      "height": 35,
+      "styleSuggestion": "brief styling recommendation"
+    }
+  ]
+}`,
+          max_new_tokens: 512,
         },
       }),
     });
@@ -87,7 +91,7 @@ Output strictly valid JSON only without markdown or code fences.`,
       prediction.status !== "canceled" &&
       attempts < 50
     ) {
-      await new Promise((r) => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 1000));
       attempts++;
       const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${prediction.id}`, {
         headers: { "Authorization": `Bearer ${repKey}` },
@@ -108,12 +112,18 @@ Output strictly valid JSON only without markdown or code fences.`,
       let apiResult = null;
 
       if (jsonStart !== -1 && jsonEnd !== -1) {
-        apiResult = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-      } else {
+        try {
+          apiResult = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+        } catch (_) {}
+      }
+
+      if (!apiResult) {
         const arrStart = cleaned.indexOf("[");
         const arrEnd = cleaned.lastIndexOf("]");
         if (arrStart !== -1 && arrEnd !== -1) {
-          apiResult = { components: JSON.parse(cleaned.slice(arrStart, arrEnd + 1)) };
+          try {
+            apiResult = { components: JSON.parse(cleaned.slice(arrStart, arrEnd + 1)) };
+          } catch (_) {}
         }
       }
 
@@ -130,13 +140,17 @@ Output strictly valid JSON only without markdown or code fences.`,
         }));
       }
 
-      return new Response(JSON.stringify({ success: true, ...apiResult }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        modelUsed: `lucataco/qwen2-vl-7b-instruct:${QWEN_VERSION.slice(0, 8)}`,
+        ...(apiResult || {}) 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     throw new Error(prediction.error || "Vision analysis timed out");
-  } catch (err) {
+  } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

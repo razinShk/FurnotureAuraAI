@@ -5,6 +5,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-replicate-key",
 };
 
+const QWEN_VERSION = "bf57361c75677fc33d480d0c5f02926e621b2caa2000347cb74aeae9d2ca07ee";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -39,19 +41,19 @@ serve(async (req) => {
       formattedImage = `data:${mimeType};base64,${imageBase64}`;
     }
 
-    // Call Replicate model google/gemini-2.5-flash for reference analysis
-    const repRes = await fetch("https://api.replicate.com/v1/models/google/gemini-2.5-flash/predictions", {
+    // Call Replicate model lucataco/qwen2-vl-7b-instruct
+    const repRes = await fetch("https://api.replicate.com/v1/predictions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${repKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        version: QWEN_VERSION,
         input: {
-          prompt: "Analyze this reference furniture piece for 3D room staging. Describe: 1) exact furniture type and seating capacity (e.g. 2-seater sofa with exactly two cushions, single armchair, etc.), 2) cushion count and section division, 3) material, fabric texture and color, 4) armrest and leg design. Be concise, realistic and precise in 1-2 sentences.",
-          images: [formattedImage],
-          temperature: 0.1,
-          thinking_budget: 0,
+          media: formattedImage,
+          prompt: "Analyze this reference furniture piece. Describe in 1-2 concise sentences: 1) exact furniture type and seating capacity, 2) cushion count and section division, 3) material, fabric texture and color, 4) armrest and leg design.",
+          max_new_tokens: 256,
         },
       }),
     });
@@ -87,7 +89,11 @@ serve(async (req) => {
         ? prediction.output.join("").trim()
         : String(prediction.output).trim();
 
-      return new Response(JSON.stringify({ success: true, description }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        modelUsed: `lucataco/qwen2-vl-7b-instruct:${QWEN_VERSION.slice(0, 8)}`,
+        description 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -99,7 +105,7 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (err) {
+  } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
