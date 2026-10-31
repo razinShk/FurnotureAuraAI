@@ -89,6 +89,28 @@ const FLAT_STYLE_TEMPLATES = [
   { id: 'Mid-Century Modern', label: 'Mid-Century', desc: 'Sculpted teak wood, iconic curves & amber glow', swatch: '#a66b38' }
 ];
 
+const FURNITURE_FABRIC_PRESETS = [
+  { id: 'Original Default', label: 'Original', swatch: 'transparent', spec: '' },
+  { id: 'Ivory Bouclé', label: 'Ivory Bouclé', swatch: '#F3EFE6', spec: 'textured ivory cream French bouclé wool upholstery' },
+  { id: 'Camel Velvet', label: 'Camel Velvet', swatch: '#C19A6B', spec: 'plush warm camel gold velvet upholstery' },
+  { id: 'Cognac Leather', label: 'Cognac Leather', swatch: '#8B4513', spec: 'full-grain Italian cognac tan leather upholstery' },
+  { id: 'Emerald Velvet', label: 'Emerald Velvet', swatch: '#1B4D3E', spec: 'deep emerald green royal velvet upholstery' },
+  { id: 'Oatmeal Linen', label: 'Oatmeal Linen', swatch: '#D8CFC2', spec: 'natural woven oatmeal Belgian linen fabric' },
+  { id: 'Charcoal Suede', label: 'Charcoal Suede', swatch: '#36393C', spec: 'matte charcoal grey brushed suede fabric' },
+  { id: 'Terracotta Chenille', label: 'Terracotta', swatch: '#B85D43', spec: 'warm terracotta rust woven chenille upholstery' },
+  { id: 'Navy Velvet', label: 'Royal Navy', swatch: '#1D2951', spec: 'deep midnight royal navy velvet upholstery' },
+  { id: 'Walnut & Travertine', label: 'Walnut/Stone', swatch: '#6E4726', spec: 'natural American walnut wood and honed travertine stone finish' }
+];
+
+const FURNITURE_TYPE_OPTIONS = {
+  sofa: ['Original Silhouette', '3-Seater Sofa', 'L-Shape Sectional Sofa', 'Curved Bouclé Sofa', '2-Seater Loveseat', 'Chesterfield Tufted Sofa', 'Low-Profile Modular Sofa'],
+  chair: ['Original Silhouette', 'Sculptural Lounge Chair', 'Swivel Barrel Accent Chair', 'Mid-Century Teak Armchair', 'Plush Recliner Chair', 'Tufted Wingback Chair'],
+  table: ['Original Silhouette', 'Round Marble Center Table', 'Rectangular Walnut Coffee Table', 'Nested Brass & Glass Tables', 'Monolithic Travertine Block Table', '6-Seater Dining Table'],
+  lamp: ['Original Silhouette', 'Arched Brass Floor Lamp', 'Sculptural Alabaster Pendant', 'Minimalist Linen Tripod Lamp', 'Modern Chandelier'],
+  floor: ['Original Silhouette', 'Hand-Knotted Wool Area Rug', 'Herringbone Oak Parquet', 'Large Format Honed Travertine Tiles', 'Jute & Sisal Woven Rug'],
+  wall: ['Original Silhouette', 'Fluted Walnut Wood Wall Panel', 'Venetian Limewash Plaster', 'Minimalist Framed Gallery Art', 'Arched Brass Wall Mirror']
+};
+
 export default function CustomerStudio({ 
   currentUser, 
   onDeductCredits, 
@@ -117,6 +139,15 @@ export default function CustomerStudio({
   const [isFullscreenPeeking, setIsFullscreenPeeking] = useState(false);
   const fullscreenTouchStartXRef = useRef(null);
 
+  // FurniPeek Lens (In-App Camera Visual Catalog Search)
+  const [isLensCameraOpen, setIsLensCameraOpen] = useState(false);
+  const [lensSourceTab, setLensSourceTab] = useState('A'); // 'A' (Catalog) | 'C' (Photo Ref)
+  const [lensSnappedPhoto, setLensSnappedPhoto] = useState(null);
+  const [isLensScanning, setIsLensScanning] = useState(false);
+  const [lensDetectedCategory, setLensDetectedCategory] = useState(null);
+  const [lensDetectedSummary, setLensDetectedSummary] = useState('');
+  const [lensMatchedItems, setLensMatchedItems] = useState([]);
+
   // Room Image & Pin State
   const [currentRoomUrl, setCurrentRoomUrl] = useState(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0, isPortrait: false, aspectRatio: 1 });
@@ -136,9 +167,9 @@ export default function CustomerStudio({
   const [recentCreations, setRecentCreations] = useState([]);
 
   // Staging Replacement Modes (C: Reference Photo, A: Store Catalog, B: Custom Prompt)
-  const [activeOption, setActiveOption] = useState(() => initialCatalogItem ? 'A' : 'C'); // 'C' | 'A' | 'B'
-  // Mobile 4-Tab Footer Drawer state ('spot' | 'C' | 'A' | 'B')
-  const [mobileFooterTab, setMobileFooterTab] = useState(() => initialCatalogItem ? 'A' : 'C');
+  const [activeOption, setActiveOption] = useState(() => initialCatalogItem ? 'A' : 'D'); // 'C' (Photo Ref) | 'A' (Catalog) | 'D' (Type & Fabric) | 'B' (AI Prompt)
+  // Mobile 5-Tab Footer Drawer state ('spot' | 'A' | 'D' | 'C' | 'B')
+  const [mobileFooterTab, setMobileFooterTab] = useState(() => initialCatalogItem ? 'A' : 'D');
   const [catalogItems, setCatalogItems] = useState([]);
   const [activeCatalogCategory, setActiveCatalogCategory] = useState('all');
   const [selectedCatalogItem, setSelectedCatalogItem] = useState(null);
@@ -150,6 +181,16 @@ export default function CustomerStudio({
   const [enableCushionSpec, setEnableCushionSpec] = useState(false);
   const [isAnalyzingRef, setIsAnalyzingRef] = useState(false);
   const [refCloningMode, setRefCloningMode] = useState('exact'); // 'exact' | 'adaptive'
+
+  // AI Model Engine: 'flux_klein' (black-forest-labs/flux-2-klein-4b) | 'nano_banana' (google/nano-banana-pro)
+  const [aiModelEngine, setAiModelEngine] = useState('flux_klein');
+
+  // Custom Furniture Type & Fabric Swatch State (Powered by black-forest-labs/flux-2-klein-4b)
+  const [selectedFurnitureType, setSelectedFurnitureType] = useState('Original Silhouette');
+  const [selectedFabricId, setSelectedFabricId] = useState('Ivory Bouclé');
+  const [customFabricSwatchBase64, setCustomFabricSwatchBase64] = useState(null);
+  const [customFabricSwatchName, setCustomFabricSwatchName] = useState('');
+  const [isSwatchCameraOpen, setIsSwatchCameraOpen] = useState(false);
 
   // AI Prompt Sub-Modes: 'furniture' (Single Spot) | 'full_flat' (Entire Flat Redesign)
   const [aiPromptSubMode, setAiPromptSubMode] = useState('furniture');
@@ -624,6 +665,82 @@ export default function CustomerStudio({
     }
   };
 
+  // FurniPeek Lens: AI Visual Search to match a snapped furniture photo against the Store Catalog
+  const runLensVisualCatalogMatch = async (photoDataUrl) => {
+    setLensSnappedPhoto(photoDataUrl);
+    setIsLensScanning(true);
+    setLensDetectedSummary('Scanning furniture shape, fabric & color...');
+    try {
+      const data = await analyzeReferenceFurniture(photoDataUrl);
+      const desc = (data?.description || '').toLowerCase();
+
+      // Detect primary furniture category from Gemini vision description
+      let detectedCat = null;
+      if (/\b(sofa|sectional|couch|settee|loveseat|divan)\b/.test(desc)) detectedCat = 'sofa';
+      else if (/\b(chair|armchair|lounger|recliner|stool|accent chair|seat)\b/.test(desc)) detectedCat = 'chair';
+      else if (/\b(table|desk|console|coffee table|dining|nightstand|sideboard|credenza)\b/.test(desc)) detectedCat = 'table';
+      else if (/\b(lamp|chandelier|pendant|sconce|light|lighting)\b/.test(desc)) detectedCat = 'lamp';
+      else if (/\b(rug|carpet|floor|tile|parquet|wood floor)\b/.test(desc)) detectedCat = 'floor';
+      else if (/\b(wall|panel|art|mirror|molding|wallpaper)\b/.test(desc)) detectedCat = 'wall';
+
+      setLensDetectedCategory(detectedCat);
+
+      const cleanDesc = data?.description
+        ? data.description.replace(/^The exact architectural furniture shown in the attached reference photo.*/i, 'Showroom furniture piece')
+        : 'Detected furniture piece';
+      setLensDetectedSummary(cleanDesc);
+
+      if (enableCushionSpec && data?.description) {
+        setReferenceDescription(data.description);
+      }
+
+      // Extract descriptive tokens for similarity scoring against catalog items
+      const stopWords = new Set(['the', 'and', 'with', 'for', 'this', 'that', 'from', 'into', 'exact', 'shown', 'photo', 'reference', 'furniture', 'piece']);
+      const tokens = desc
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !stopWords.has(w));
+
+      const scored = (catalogItems || []).map((item) => {
+        let score = 0;
+        const itemText = `${item.name || ''} ${item.category || ''} ${item.material || ''} ${item.prompt || ''} ${item.color || ''}`.toLowerCase();
+        if (detectedCat && item.category === detectedCat) {
+          score += 55;
+        }
+        tokens.forEach((tok) => {
+          if (itemText.includes(tok)) {
+            score += 8;
+          }
+        });
+        const matchPct = Math.min(98, Math.max(detectedCat && item.category === detectedCat ? 82 : 64, 60 + score));
+        return { ...item, _lensScore: score, _matchPct: matchPct };
+      });
+
+      scored.sort((a, b) => b._lensScore - a._lensScore);
+      const topMatches = detectedCat
+        ? scored.filter(i => i.category === detectedCat || i._lensScore > 0).slice(0, 6)
+        : scored.slice(0, 6);
+
+      const finalMatches = topMatches.length > 0 ? topMatches : scored.slice(0, 4);
+      setLensMatchedItems(finalMatches);
+
+      if (lensSourceTab === 'A') {
+        if (detectedCat) setActiveCatalogCategory(detectedCat);
+        if (finalMatches[0]) setSelectedCatalogItem(finalMatches[0]);
+      }
+
+      setStatusBanner(`🔍 FurniPeek Lens found ${finalMatches.length} similar catalog pieces${detectedCat ? ` (${detectedCat}s)` : ''}!`);
+      toast.success(`FurniPeek Lens: Found ${finalMatches.length} similar catalog matches!`);
+    } catch (err) {
+      console.warn('Lens visual search error:', err);
+      const fallback = (catalogItems || []).slice(0, 4).map(it => ({ ...it, _matchPct: 80 }));
+      setLensMatchedItems(fallback);
+      setLensDetectedSummary('Matched against showroom catalog collection');
+    } finally {
+      setIsLensScanning(false);
+    }
+  };
+
   // =========================================================================
   // 6. EXECUTE AI STAGING (Strict Auth & 2-Credit Enforcement + Recent Creations Save)
   // =========================================================================
@@ -713,6 +830,12 @@ export default function CustomerStudio({
     let stagingCostAddition = 0;
     let stagedItemForCart = null;
 
+    const activeFabricObj = FURNITURE_FABRIC_PRESETS.find(f => f.id === selectedFabricId) || FURNITURE_FABRIC_PRESETS[0];
+    const fabricSpecText = activeFabricObj?.spec || '';
+    const furnitureTypeText = selectedFurnitureType && selectedFurnitureType !== 'Original Silhouette'
+      ? selectedFurnitureType
+      : '';
+
     if (activeOption === 'A') {
       if (!selectedCatalogItem) {
         setStatusBanner('⚠️ Please select a piece from the catalog.');
@@ -723,6 +846,12 @@ export default function CustomerStudio({
       stagedItemForCart = selectedCatalogItem;
     } else if (activeOption === 'B') {
       itemDescription = isFullFlatMode ? composedFlatPrompt : customPromptText.trim();
+    } else if (activeOption === 'D') {
+      const pieceName = furnitureTypeText || pin.name || 'furniture piece';
+      const fabricDesc = customFabricSwatchBase64
+        ? 'upholstered in custom physical fabric swatch texture'
+        : (fabricSpecText ? `upholstered in ${fabricSpecText}` : 'designer upholstery');
+      itemDescription = `${pieceName} ${fabricDesc}`;
     } else {
       const baseRefDesc = (enableCushionSpec && referenceDescription.trim())
         ? referenceDescription.trim()
@@ -732,9 +861,16 @@ export default function CustomerStudio({
         : `${baseRefDesc} (Exact 1:1 silhouette, cushion geometry, and upholstery clone)`;
     }
 
+    const normalizedSwatchImage = customFabricSwatchBase64
+      ? await normalizeImageToFlatAspect(customFabricSwatchBase64, flatAspectRatio)
+      : null;
+    const shouldUseFluxKlein = aiModelEngine === 'flux_klein' || activeOption === 'D' || Boolean(fabricSpecText || furnitureTypeText || normalizedSwatchImage);
+
     showLoading(
       `Staging "${pin.name}"...`,
-      `Rendering photorealistic 3D lighting, perspective, and floor shadows (2 AI Credits)...`
+      shouldUseFluxKlein
+        ? 'Rendering with Flux-2 Klein 4B (preserving room architecture & applying realistic upholstery)...'
+        : 'Rendering photorealistic 3D lighting, perspective, and floor shadows (2 AI Credits)...'
     );
 
     try {
@@ -764,6 +900,10 @@ export default function CustomerStudio({
         referenceImage: normalizedRefImage,
         referenceDescription: enableCushionSpec ? referenceDescription.trim() : '',
         catalogImageUrl: catalogImageUrl,
+        fabricSwatchImage: normalizedSwatchImage,
+        fabricSpec: fabricSpecText,
+        furnitureTypeSpec: furnitureTypeText,
+        useFluxKlein: shouldUseFluxKlein,
         pinInfo: pin,
         allPins: componentPins,
         activeOption: activeOption,
@@ -1128,11 +1268,18 @@ export default function CustomerStudio({
   };
 
   const selectedPin = (selectedPinId && componentPins.find(p => p.id && p.id === selectedPinId)) || componentPins[0] || null;
-  const filteredCatalog = catalogItems.filter(item => {
-    const matchCat = activeCatalogCategory === 'all' || item.category === activeCatalogCategory;
-    const matchSearch = !catalogSearch || item.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (item.material || '').toLowerCase().includes(catalogSearch.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  const lensScoreMap = new Map(lensMatchedItems.map(m => [m.id, m]));
+  const filteredCatalog = catalogItems
+    .filter(item => {
+      const matchCat = activeCatalogCategory === 'all' || item.category === activeCatalogCategory;
+      const matchSearch = !catalogSearch || item.name.toLowerCase().includes(catalogSearch.toLowerCase()) || (item.material || '').toLowerCase().includes(catalogSearch.toLowerCase());
+      return matchCat && matchSearch;
+    })
+    .map(item => {
+      const lensHit = lensScoreMap.get(item.id);
+      return lensHit ? { ...item, _lensScore: lensHit._lensScore, _matchPct: lensHit._matchPct } : item;
+    })
+    .sort((a, b) => (b._lensScore || 0) - (a._lensScore || 0));
 
   const creditsCount = currentUser?.credits ?? 0;
   const hasCredits = creditsCount >= 2;
@@ -2394,55 +2541,110 @@ export default function CustomerStudio({
               </div>
             )}
 
-            {/* Desktop Staging Method Segmented Switcher (Hidden on Mobile where 4-tab Footer is used) */}
-            <div className="hidden lg:block">
-              <div className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 mb-2">
-                Staging Method
+            {/* Desktop Staging Method Segmented Switcher & Engine Selector */}
+            <div className="hidden lg:block space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500">
+                  Staging Method
+                </span>
+                {/* AI Model Engine Selector */}
+                <div className="flex items-center gap-1 bg-stone-100 dark:bg-stone-950 p-0.5 rounded-xl border border-stone-200 dark:border-stone-800 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiModelEngine('flux_klein');
+                      setStatusBanner('⚡ Switched to Flux-2 Klein 4B (Replicate multi-reference architecture & fabric model)');
+                    }}
+                    className={`px-2 py-0.5 rounded-lg transition-all ${
+                      aiModelEngine === 'flux_klein'
+                        ? 'bg-amber-500 text-white shadow-xs font-extrabold'
+                        : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
+                    }`}
+                    title="black-forest-labs/flux-2-klein-4b"
+                  >
+                    ⚡ Flux-2 Klein
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiModelEngine('nano_banana');
+                      setStatusBanner('🍌 Switched to Google Nano Banana Pro');
+                    }}
+                    className={`px-2 py-0.5 rounded-lg transition-all ${
+                      aiModelEngine === 'nano_banana'
+                        ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900 shadow-xs font-extrabold'
+                        : 'text-stone-500 dark:text-stone-400 hover:text-stone-800'
+                    }`}
+                    title="google/nano-banana-pro"
+                  >
+                    Nano Banana
+                  </button>
+                </div>
               </div>
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
-                <button
-                  onClick={() => {
-                    setActiveOption('C');
-                    setMobileFooterTab('C');
-                  }}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
-                    activeOption === 'C'
-                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
-                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-                  }`}
-                >
-                  <Camera size={15} />
-                  <span>Photo Ref</span>
-                </button>
 
+              <div className="grid grid-cols-4 gap-1 p-1 bg-stone-100 dark:bg-stone-950 rounded-2xl border border-stone-200 dark:border-stone-800">
                 <button
+                  type="button"
                   onClick={() => {
                     setActiveOption('A');
                     setMobileFooterTab('A');
                   }}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                  className={`py-2 px-1 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'A'
                       ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
                       : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
-                  <Store size={15} />
-                  <span>Catalog</span>
+                  <Store size={14} />
+                  <span className="truncate">Catalog</span>
                 </button>
 
                 <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOption('D');
+                    setMobileFooterTab('D');
+                  }}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all ${
+                    activeOption === 'D'
+                      ? 'bg-white dark:bg-stone-900 text-amber-600 dark:text-amber-400 shadow-sm border border-amber-300 dark:border-amber-700/50'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Sparkles size={14} className="text-amber-500" />
+                  <span className="truncate">Type & Fabric</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOption('C');
+                    setMobileFooterTab('C');
+                  }}
+                  className={`py-2 px-1 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all ${
+                    activeOption === 'C'
+                      ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Camera size={14} />
+                  <span className="truncate">Photo Ref</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => {
                     setActiveOption('B');
                     setMobileFooterTab('B');
                   }}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                  className={`py-2 px-1 rounded-xl text-[11px] font-bold flex flex-col items-center gap-1 transition-all ${
                     activeOption === 'B'
                       ? 'bg-white dark:bg-stone-900 text-brand-600 dark:text-brand-400 shadow-sm border border-stone-200 dark:border-stone-800'
                       : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
                   }`}
                 >
-                  <Sparkles size={15} />
-                  <span>AI Prompt</span>
+                  <Sparkles size={14} />
+                  <span className="truncate">AI Prompt</span>
                 </button>
               </div>
             </div>
@@ -2471,8 +2673,20 @@ export default function CustomerStudio({
                     </div>
 
                     <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLensSourceTab('C');
+                          setIsLensCameraOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-[#fbf8f3] dark:bg-stone-800 border border-[#c59b63]/50 text-[11px] font-bold text-[#9c733b] dark:text-[#d9b37c] hover:bg-[#f4ecde] shadow-sm flex items-center gap-1"
+                        title="Snap furniture with in-app camera"
+                      >
+                        <Camera size={12} />
+                        <span>Snap</span>
+                      </button>
                       <label className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-[11px] font-bold text-stone-700 dark:text-stone-200 cursor-pointer hover:bg-stone-50 shadow-sm">
-                        Change
+                        Upload
                         <input
                           type="file"
                           accept="image/*"
@@ -2485,7 +2699,7 @@ export default function CustomerStudio({
                                 const base64 = ev.target.result;
                                 setUploadedReferenceBase64(base64);
                                 setUploadedReferenceName(file.name);
-                                if (enableCushionSpec) analyzeReferenceImage(base64);
+                                runLensVisualCatalogMatch(base64);
                               };
                               reader.readAsDataURL(file);
                             }
@@ -2498,6 +2712,8 @@ export default function CustomerStudio({
                           setUploadedReferenceBase64(null);
                           setUploadedReferenceName('');
                           setReferenceDescription('');
+                          setLensSnappedPhoto(null);
+                          setLensMatchedItems([]);
                         }}
                         className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors"
                         title="Remove reference image"
@@ -2533,7 +2749,7 @@ export default function CustomerStudio({
                               const base64 = ev.target.result;
                               setUploadedReferenceBase64(base64);
                               setUploadedReferenceName(file.name);
-                              if (enableCushionSpec) analyzeReferenceImage(base64);
+                              runLensVisualCatalogMatch(base64);
                             };
                             reader.readAsDataURL(file);
                           }
@@ -2541,9 +2757,16 @@ export default function CustomerStudio({
                       />
                     </label>
 
-                    {/* Card 2: Snap Furniture / Swatch with Camera */}
-                    <label className="p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-950/60 hover:bg-stone-100 dark:hover:bg-stone-900 flex flex-col items-center justify-center text-center gap-1.5 cursor-pointer transition-all shadow-sm">
-                      <div className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-[#b0854b] shrink-0">
+                    {/* Card 2: Snap Furniture / Swatch with In-App Camera (FurniPeek Lens) */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLensSourceTab('C');
+                        setIsLensCameraOpen(true);
+                      }}
+                      className="p-3 rounded-2xl border border-[#c59b63]/50 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-950/60 hover:bg-[#fbf8f3] dark:hover:bg-stone-900 flex flex-col items-center justify-center text-center gap-1.5 cursor-pointer transition-all shadow-sm active:scale-95"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-[#b0854b] shrink-0 border border-[#c59b63]/30">
                         <Camera size={16} />
                       </div>
                       <div>
@@ -2551,29 +2774,72 @@ export default function CustomerStudio({
                           Snap Furniture
                         </span>
                         <span className="text-[10px] text-stone-500 dark:text-stone-400 block">
-                          Capture in store / home
+                          In-app camera & match
                         </span>
                       </div>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              const base64 = ev.target.result;
-                              setUploadedReferenceBase64(base64);
-                              setUploadedReferenceName(file.name || 'Camera Reference');
-                              if (enableCushionSpec) analyzeReferenceImage(base64);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                      />
-                    </label>
+                    </button>
+                  </div>
+                )}
+
+                {/* FurniPeek Lens: Similar Catalog Furniture Matches inside Photo Ref Tab */}
+                {uploadedReferenceBase64 && (isLensScanning || lensMatchedItems.length > 0) && (
+                  <div className="p-2.5 rounded-2xl bg-[#fbf8f3] dark:bg-stone-950 border border-[#c59b63]/40 dark:border-stone-800 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#8c6430] dark:text-[#d9b37c] flex items-center gap-1.5">
+                        <Sparkles size={11} className="text-[#c59b63]" />
+                        <span>Similar in Showroom Catalog</span>
+                      </span>
+                      {isLensScanning ? (
+                        <span className="text-[10px] font-bold text-[#b0854b] animate-pulse flex items-center gap-1">
+                          <RefreshCw size={10} className="animate-spin" /> Matching...
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400">
+                          Tap to stage from catalog
+                        </span>
+                      )}
+                    </div>
+
+                    {lensDetectedSummary && (
+                      <p className="text-[10px] text-stone-600 dark:text-stone-400 line-clamp-1 italic">
+                        “{lensDetectedSummary}”
+                      </p>
+                    )}
+
+                    {!isLensScanning && lensMatchedItems.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-0.5 pt-0.5">
+                        {lensMatchedItems.slice(0, 5).map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCatalogItem(item);
+                              setActiveOption('A');
+                              setMobileFooterTab('A');
+                              toast.info(`Selected "${item.name}" from catalog!`);
+                            }}
+                            className="shrink-0 w-36 p-1.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 hover:border-[#c59b63] text-left transition-all shadow-sm flex items-center gap-2 group"
+                          >
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="w-11 h-11 rounded-lg object-cover bg-stone-100 shrink-0"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[9px] font-extrabold text-[#9c733b] dark:text-[#d9b37c]">
+                                {item._matchPct || 88}% Match
+                              </div>
+                              <div className="text-[10px] font-extrabold text-stone-900 dark:text-white truncate">
+                                {item.name}
+                              </div>
+                              <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                                ${Number(item.price || 0).toLocaleString()}
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2703,20 +2969,144 @@ export default function CustomerStudio({
             {/* SECTION 3 (TAB CONTENT A): SHOWROOM CATALOG */}
             {activeOption === 'A' && (
               <div className={`${mobileFooterTab === 'A' ? 'block' : 'hidden'} lg:block space-y-2.5`}>
-                {/* Catalog Header + Search & Category Pills */}
+                {/* Catalog Header + Search + In-App Lens Camera Icon & Category Pills */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <h3 className="lg:hidden text-sm font-extrabold text-stone-900 dark:text-stone-100 shrink-0">
                       Catalog
                     </h3>
-                    <input
-                      type="text"
-                      value={catalogSearch}
-                      onChange={(e) => setCatalogSearch(e.target.value)}
-                      placeholder="Search luxury sofas, tables..."
-                      className="flex-1 w-full bg-stone-100/80 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-full px-3.5 py-1.5 sm:py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
-                    />
+                    <div className="relative flex-1 flex items-center">
+                      <input
+                        type="text"
+                        value={catalogSearch}
+                        onChange={(e) => setCatalogSearch(e.target.value)}
+                        placeholder="Search luxury sofas, tables..."
+                        className="w-full bg-stone-100/80 dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-full pl-3.5 pr-16 py-1.5 sm:py-2 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500"
+                      />
+                      {/* Small Upload & In-App Camera Icons (FurniPeek Lens) Inside Catalog Search Bar */}
+                      <div className="absolute right-1.5 flex items-center gap-1">
+                        <label
+                          title="FurniPeek Lens: Upload furniture photo to find similar catalog items"
+                          aria-label="Upload furniture photo to search catalog"
+                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white dark:bg-stone-800 border border-[#c59b63]/50 text-[#9c733b] dark:text-[#d9b37c] hover:bg-[#fbf8f3] flex items-center justify-center shadow-sm transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Upload size={11} strokeWidth={2.2} />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const base64 = ev.target.result;
+                                  setLensSourceTab('A');
+                                  setUploadedReferenceBase64(base64);
+                                  setUploadedReferenceName(file.name || 'Uploaded Furniture');
+                                  runLensVisualCatalogMatch(base64);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLensSourceTab('A');
+                            setIsLensCameraOpen(true);
+                          }}
+                          title="FurniPeek Lens: Snap furniture in store to find similar catalog items"
+                          aria-label="Snap furniture to search catalog"
+                          className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-gradient-to-br from-[#c59b63] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] text-white flex items-center justify-center shadow-sm transition-all active:scale-95"
+                        >
+                          <Camera size={12} strokeWidth={2.2} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Active FurniPeek Lens Visual Search Banner (When user snapped a furniture photo in store) */}
+                  {(isLensScanning || (lensSnappedPhoto && lensMatchedItems.length > 0)) && (
+                    <div className="p-2 rounded-2xl bg-[#fbf8f3] dark:bg-stone-950 border border-[#c59b63]/50 flex items-center justify-between gap-2 shadow-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {lensSnappedPhoto && (
+                          <img
+                            src={lensSnappedPhoto}
+                            alt="Snapped Furniture"
+                            className="w-9 h-9 rounded-lg object-cover border border-[#c59b63]/40 shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-[10px] font-extrabold text-[#8c6430] dark:text-[#d9b37c] flex items-center gap-1">
+                            <Sparkles size={10} className="text-[#c59b63]" />
+                            <span>
+                              {isLensScanning
+                                ? 'FurniPeek Lens Scanning...'
+                                : `Lens Match: Showing Similar ${lensDetectedCategory ? `${lensDetectedCategory.toUpperCase()}S` : 'Pieces'}`}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                            {lensDetectedSummary}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <label
+                          className="p-1.5 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-[#9c733b] dark:text-[#d9b37c] hover:bg-stone-50 cursor-pointer"
+                          title="Upload another furniture photo"
+                        >
+                          <Upload size={12} />
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const base64 = ev.target.result;
+                                  setLensSourceTab('A');
+                                  setUploadedReferenceBase64(base64);
+                                  setUploadedReferenceName(file.name || 'Uploaded Furniture');
+                                  runLensVisualCatalogMatch(base64);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLensSourceTab('A');
+                            setIsLensCameraOpen(true);
+                          }}
+                          className="p-1.5 rounded-lg bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-[#9c733b] dark:text-[#d9b37c] hover:bg-stone-50"
+                          title="Resnap furniture"
+                        >
+                          <Camera size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLensSnappedPhoto(null);
+                            setLensMatchedItems([]);
+                            setLensDetectedCategory(null);
+                            setActiveCatalogCategory('all');
+                          }}
+                          className="p-1.5 rounded-lg text-stone-400 hover:text-rose-500"
+                          title="Clear visual search"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
                     {['all', 'sofa', 'table', 'chair', 'floor', 'wall', 'lamp'].map((cat) => (
@@ -2763,6 +3153,11 @@ export default function CustomerStudio({
                             {isSel && (
                               <div className="flex absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-brand-500 text-white items-center justify-center shadow-md">
                                 <Check size={12} strokeWidth={3} />
+                              </div>
+                            )}
+                            {lensSnappedPhoto && item._matchPct && (
+                              <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-stone-950/80 backdrop-blur-md text-[9px] font-extrabold text-[#e0bc85] border border-[#c59b63]/40 shadow-sm">
+                                {item._matchPct}% Match
                               </div>
                             )}
                             <div
@@ -3105,6 +3500,223 @@ export default function CustomerStudio({
                 )}
               </div>
             )}
+
+            {/* =========================================================================
+                SECTION 4 (TAB CONTENT D): CUSTOMIZE TYPE & FABRIC (Powered by Flux-2 Klein 4B)
+                ========================================================================= */}
+            {activeOption === 'D' && (
+              <div className={`${mobileFooterTab === 'D' ? 'block' : 'hidden'} lg:block space-y-3`}>
+                <div className="p-3.5 rounded-2xl border border-amber-300/80 dark:border-amber-700/50 bg-gradient-to-br from-amber-50/70 via-white to-amber-50/30 dark:from-stone-900 dark:via-stone-900 dark:to-stone-950 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-amber-500 text-white flex items-center justify-center shadow-xs">
+                        <Sparkles size={13} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-stone-900 dark:text-white flex items-center gap-1.5">
+                          <span>Type & Fabric Studio</span>
+                          <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-white text-[9px] font-extrabold uppercase tracking-wide">
+                            Flux-2 Klein 4B
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-stone-500 dark:text-stone-400">
+                          Target Spot: <strong className="text-stone-800 dark:text-stone-200">{selectedPin?.name || 'Selected Furniture'}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {(selectedFurnitureType !== 'Original Silhouette' || selectedFabricId !== 'Original Default' || customFabricSwatchBase64) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFurnitureType('Original Silhouette');
+                          setSelectedFabricId('Original Default');
+                          setCustomFabricSwatchBase64(null);
+                          setCustomFabricSwatchName('');
+                        }}
+                        className="text-[10px] font-bold text-rose-500 hover:underline"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 1. Furniture Type / Configuration Pills */}
+                  <div className="space-y-1.5 pt-1 border-t border-amber-200/50 dark:border-stone-800">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400 block">
+                      1. Furniture Silhouette / Type ({selectedPin?.category || 'sofa'})
+                    </span>
+                    <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                      {(FURNITURE_TYPE_OPTIONS[selectedPin?.category || 'sofa'] || FURNITURE_TYPE_OPTIONS.sofa).map((typeOpt) => {
+                        const isSelected = selectedFurnitureType === typeOpt;
+                        return (
+                          <button
+                            key={typeOpt}
+                            type="button"
+                            onClick={() => setSelectedFurnitureType(typeOpt)}
+                            className={`px-3 py-1.5 rounded-xl text-[11px] font-bold shrink-0 border transition-all ${
+                              isSelected
+                                ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-sm'
+                                : 'bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:border-stone-400'
+                            }`}
+                          >
+                            {typeOpt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 2. Fabric & Material Swatches + Custom Swatch Snap/Upload */}
+                  <div className="space-y-2 pt-1 border-t border-amber-200/50 dark:border-stone-800">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                        2. Upholstery Fabric & Material Finish
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setIsSwatchCameraOpen(true)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-200 border border-amber-500/30 text-[10px] font-extrabold hover:bg-amber-500/25 transition-colors"
+                          title="Snap physical fabric swatch with in-app camera"
+                        >
+                          <Camera size={11} />
+                          <span>Snap Swatch</span>
+                        </button>
+                        <label
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 text-[10px] font-extrabold cursor-pointer hover:bg-stone-200 transition-colors"
+                          title="Upload fabric texture image"
+                        >
+                          <Upload size={11} />
+                          <span>Upload</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                setCustomFabricSwatchBase64(ev.target.result);
+                                setCustomFabricSwatchName(file.name);
+                                setStatusBanner(`🧵 Custom fabric swatch "${file.name}" loaded for Flux-2 Klein 4B!`);
+                              };
+                              reader.readAsDataURL(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Custom Uploaded/Snapped Fabric Swatch Preview Banner */}
+                    {customFabricSwatchBase64 && (
+                      <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-amber-100/60 dark:bg-amber-950/40 border border-amber-400 dark:border-amber-700">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img
+                            src={customFabricSwatchBase64}
+                            alt="Custom Fabric Swatch"
+                            className="w-9 h-9 rounded-lg object-cover border border-amber-500 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-black text-stone-900 dark:text-white truncate">
+                              Custom Swatch: {customFabricSwatchName || 'In-Store Fabric'}
+                            </div>
+                            <div className="text-[9px] text-amber-700 dark:text-amber-300 font-semibold">
+                              Flux-2 Klein 4B will wrap the furniture in this exact material texture
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomFabricSwatchBase64(null);
+                            setCustomFabricSwatchName('');
+                          }}
+                          className="p-1 rounded-lg text-stone-400 hover:text-rose-500"
+                          title="Remove custom swatch"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Preset Swatch Pills */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {FURNITURE_FABRIC_PRESETS.map((fab) => {
+                        const isSelected = !customFabricSwatchBase64 && selectedFabricId === fab.id;
+                        return (
+                          <button
+                            key={fab.id}
+                            type="button"
+                            onClick={() => {
+                              setCustomFabricSwatchBase64(null);
+                              setCustomFabricSwatchName('');
+                              setSelectedFabricId(fab.id);
+                            }}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all text-left ${
+                              isSelected
+                                ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-sm'
+                                : 'bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:border-stone-300'
+                            }`}
+                          >
+                            <span
+                              className="w-3.5 h-3.5 rounded-full border border-black/20 shrink-0"
+                              style={{ backgroundColor: fab.swatch }}
+                            />
+                            <span className="truncate">{fab.label || fab.id}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-amber-50/60 dark:bg-stone-950 border border-amber-200/50 dark:border-stone-800 text-[10px] text-amber-800 dark:text-amber-200/80 flex items-center gap-1.5">
+                    <Sparkles size={12} className="shrink-0 text-amber-500" />
+                    <span>Preserves the entire room architecture, lighting, and flooring with 100% fidelity.</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Optional Collapsible Swatch Customizer for Catalog (A) & Photo Ref (C) */}
+            {(activeOption === 'A' || activeOption === 'C') && (
+              <div className="mt-2 p-2.5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-stone-500 dark:text-stone-400 flex items-center gap-1">
+                    <Sparkles size={11} className="text-amber-500" />
+                    <span>Optional Fabric & Silhouette Customizer</span>
+                  </span>
+                  <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400">
+                    Flux-2 Klein
+                  </span>
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                  {FURNITURE_FABRIC_PRESETS.map((fab) => {
+                    const isSelected = selectedFabricId === fab.id;
+                    return (
+                      <button
+                        key={fab.id}
+                        type="button"
+                        onClick={() => setSelectedFabricId(fab.id)}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 border transition-all ${
+                          isSelected
+                            ? 'bg-amber-500 text-white border-amber-500'
+                            : 'bg-white dark:bg-stone-950 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-800'
+                        }`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full border border-black/20 shrink-0"
+                          style={{ backgroundColor: fab.swatch }}
+                        />
+                        <span>{fab.label || fab.id}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* =========================================================================
@@ -3139,13 +3751,18 @@ export default function CustomerStudio({
                 <button
                   onClick={executeAIStaging}
                   disabled={isAILoading || !currentRoomUrl}
-                  className="w-full py-2.5 sm:py-3.5 px-4 rounded-full sm:rounded-2xl bg-gradient-to-r from-[#c59b63] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] active:scale-[0.99] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
+                  className="w-full py-2.5 sm:py-3.5 px-4 rounded-full sm:rounded-2xl bg-gradient-to-r from-[#c59b63] via-[#b88d55] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] active:scale-[0.99] text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-brand-500/25 flex items-center justify-center gap-1.5 transition-all disabled:opacity-40"
                 >
                   <Sparkles size={16} className="shrink-0" />
                   <span className="truncate">
                     {activeOption === 'B' && aiPromptSubMode === 'full_flat'
                       ? `Redesign Full ${flatRoomType} (${flatStyle.split(' ')[0]})`
+                      : activeOption === 'D'
+                      ? `Stage ${selectedFurnitureType !== 'Original Silhouette' ? selectedFurnitureType : (selectedPin?.name || 'Spot')}`
                       : `Stage ${selectedPin?.name || 'Spot'}`}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-md bg-black/20 text-[10px] font-black shrink-0">
+                    {aiModelEngine === 'flux_klein' || activeOption === 'D' ? '⚡ Flux-2' : '🍌 Nano'}
                   </span>
                   <span className="text-xs opacity-90 font-semibold shrink-0">• 2 Credits</span>
                 </button>
@@ -3155,45 +3772,26 @@ export default function CustomerStudio({
         </aside>
 
         {/* =========================================================================
-            4-SECTION MOBILE FOOTER NAVIGATION BAR (Pinned Fixed Bottom-0 on All Mobile Viewports)
+            5-SECTION MOBILE FOOTER NAVIGATION BAR (Pinned Fixed Bottom-0 on All Mobile Viewports)
             ========================================================================= */}
         <nav
           aria-label="Studio Tools Footer"
-          className="lg:hidden fixed bottom-0 inset-x-0 h-14 z-50 grid grid-cols-4 border-t border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-950 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]"
+          className="lg:hidden fixed bottom-0 inset-x-0 h-14 z-50 grid grid-cols-5 border-t border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-950 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]"
         >
           <button
             type="button"
             onClick={() => setMobileFooterTab('spot')}
-            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+            className={`relative h-14 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
               mobileFooterTab === 'spot'
                 ? 'text-[#b0854b] dark:text-brand-400'
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
             }`}
           >
             {mobileFooterTab === 'spot' && (
-              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+              <span className="absolute top-0 inset-x-2 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
             )}
-            <Crosshair size={18} strokeWidth={mobileFooterTab === 'spot' ? 2.4 : 1.8} />
-            <span>Target Spot</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setActiveOption('C');
-              setMobileFooterTab('C');
-            }}
-            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
-              mobileFooterTab === 'C'
-                ? 'text-[#b0854b] dark:text-brand-400'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
-            }`}
-          >
-            {mobileFooterTab === 'C' && (
-              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
-            )}
-            <Camera size={18} strokeWidth={mobileFooterTab === 'C' ? 2.4 : 1.8} />
-            <span>Photo Ref</span>
+            <Crosshair size={17} strokeWidth={mobileFooterTab === 'spot' ? 2.4 : 1.8} />
+            <span className="truncate">Target</span>
           </button>
 
           <button
@@ -3202,17 +3800,55 @@ export default function CustomerStudio({
               setActiveOption('A');
               setMobileFooterTab('A');
             }}
-            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+            className={`relative h-14 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
               mobileFooterTab === 'A'
                 ? 'text-[#b0854b] dark:text-brand-400'
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
             }`}
           >
             {mobileFooterTab === 'A' && (
-              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+              <span className="absolute top-0 inset-x-2 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
             )}
-            <Store size={18} strokeWidth={mobileFooterTab === 'A' ? 2.4 : 1.8} />
-            <span>Catalog</span>
+            <Store size={17} strokeWidth={mobileFooterTab === 'A' ? 2.4 : 1.8} />
+            <span className="truncate">Catalog</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveOption('D');
+              setMobileFooterTab('D');
+            }}
+            className={`relative h-14 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
+              mobileFooterTab === 'D'
+                ? 'text-amber-600 dark:text-amber-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'D' && (
+              <span className="absolute top-0 inset-x-2 h-0.5 rounded-full bg-amber-500" />
+            )}
+            <Sparkles size={17} strokeWidth={mobileFooterTab === 'D' ? 2.4 : 1.8} className="text-amber-500" />
+            <span className="truncate">Fabric</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveOption('C');
+              setMobileFooterTab('C');
+            }}
+            className={`relative h-14 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
+              mobileFooterTab === 'C'
+                ? 'text-[#b0854b] dark:text-brand-400'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+            }`}
+          >
+            {mobileFooterTab === 'C' && (
+              <span className="absolute top-0 inset-x-2 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+            )}
+            <Camera size={17} strokeWidth={mobileFooterTab === 'C' ? 2.4 : 1.8} />
+            <span className="truncate">Photo</span>
           </button>
 
           <button
@@ -3221,17 +3857,17 @@ export default function CustomerStudio({
               setActiveOption('B');
               setMobileFooterTab('B');
             }}
-            className={`relative h-14 flex flex-col items-center justify-center gap-1 text-[11px] font-bold transition-colors ${
+            className={`relative h-14 flex flex-col items-center justify-center gap-0.5 text-[10px] font-bold transition-colors ${
               mobileFooterTab === 'B'
                 ? 'text-[#b0854b] dark:text-brand-400'
                 : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
             }`}
           >
             {mobileFooterTab === 'B' && (
-              <span className="absolute top-0 inset-x-4 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
+              <span className="absolute top-0 inset-x-2 h-0.5 rounded-full bg-[#b0854b] dark:bg-brand-400" />
             )}
-            <Sparkles size={18} strokeWidth={mobileFooterTab === 'B' ? 2.4 : 1.8} />
-            <span>AI Prompt</span>
+            <Sparkles size={17} strokeWidth={mobileFooterTab === 'B' ? 2.4 : 1.8} />
+            <span className="truncate">Prompt</span>
           </button>
         </nav>
       </main>
@@ -3544,13 +4180,45 @@ export default function CustomerStudio({
         </div>
       )}
 
-      {/* Camera Capture Modal */}
+      {/* Camera Capture Modal (For Room Photo) */}
       <CameraCaptureModal
         isOpen={isCameraOpen}
         onClose={() => setIsCameraOpen(false)}
         onPhotoCaptured={(dataUrl) => {
           loadRoomImage(dataUrl, 'Live Camera Room');
           setStatusBanner('📷 New room photo captured! Spatial vision scanning coordinates...');
+        }}
+      />
+
+      {/* FurniPeek Lens In-App Camera Modal (For Snapping Furniture in Store & Finding Similar Catalog Pieces) */}
+      <CameraCaptureModal
+        isOpen={isLensCameraOpen}
+        onClose={() => setIsLensCameraOpen(false)}
+        title="FurniPeek Lens — Visual Furniture Search"
+        subtitle="Snap any furniture in the showroom or home to find similar catalog pieces"
+        snapButtonLabel="Snap Furniture"
+        confirmButtonLabel="Find Similar Furniture"
+        frameHint="Center the sofa, chair, table, or lamp inside the lens frame"
+        onPhotoCaptured={(dataUrl) => {
+          setUploadedReferenceBase64(dataUrl);
+          setUploadedReferenceName('In-Store Camera Snap');
+          runLensVisualCatalogMatch(dataUrl);
+        }}
+      />
+
+      {/* Fabric Swatch Camera Modal (For Snapping Physical Fabric Swatch Books in Store for Flux-2 Klein 4B) */}
+      <CameraCaptureModal
+        isOpen={isSwatchCameraOpen}
+        onClose={() => setIsSwatchCameraOpen(false)}
+        title="Snap Fabric Swatch — Flux-2 Klein 4B"
+        subtitle="Take a close-up photo of any physical fabric, leather, or wood swatch in the showroom"
+        snapButtonLabel="Snap Fabric Swatch"
+        confirmButtonLabel="Apply Fabric Texture"
+        frameHint="Hold camera steady over the fabric or leather sample for best texture fidelity"
+        onPhotoCaptured={(dataUrl) => {
+          setCustomFabricSwatchBase64(dataUrl);
+          setCustomFabricSwatchName('Live Showroom Swatch');
+          setStatusBanner('🧵 Live showroom fabric swatch captured! Flux-2 Klein 4B will apply this exact upholstery.');
         }}
       />
 

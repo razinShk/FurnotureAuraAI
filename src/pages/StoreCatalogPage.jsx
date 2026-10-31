@@ -8,9 +8,15 @@ import {
   Check, 
   ChevronRight,
   SlidersHorizontal,
-  Layers
+  Layers,
+  Camera,
+  Upload,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { fetchCatalogItems, fetchStores } from '../services/supabaseService';
+import { analyzeReferenceFurniture } from '../services/aiService';
+import CameraCaptureModal from '../components/CameraCaptureModal';
 
 export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
   const [catalog, setCatalog] = useState([]);
@@ -20,6 +26,11 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('popular'); // 'popular' | 'price-asc' | 'price-desc'
   const [loading, setLoading] = useState(true);
+  const [isLensCameraOpen, setIsLensCameraOpen] = useState(false);
+  const [lensSnappedPhoto, setLensSnappedPhoto] = useState(null);
+  const [isLensScanning, setIsLensScanning] = useState(false);
+  const [lensDetectedSummary, setLensDetectedSummary] = useState('');
+  const [lensScoreMap, setLensScoreMap] = useState({});
 
   useEffect(() => {
     fetchData();
@@ -51,6 +62,53 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
   ];
 
   // Filter and Sort
+  const handleLensCapture = async (photoDataUrl) => {
+    setLensSnappedPhoto(photoDataUrl);
+    setIsLensScanning(true);
+    setLensDetectedSummary('Analyzing snapped furniture shape, fabric & color...');
+    try {
+      const data = await analyzeReferenceFurniture(photoDataUrl);
+      const desc = (data?.description || '').toLowerCase();
+
+      let detectedCat = 'all';
+      if (/\b(sofa|sectional|couch|settee|loveseat|divan)\b/.test(desc)) detectedCat = 'sofa';
+      else if (/\b(chair|armchair|lounger|recliner|stool|accent chair|seat)\b/.test(desc)) detectedCat = 'chair';
+      else if (/\b(table|desk|console|coffee table|dining|nightstand|sideboard|credenza)\b/.test(desc)) detectedCat = 'table';
+      else if (/\b(lamp|chandelier|pendant|sconce|light|lighting)\b/.test(desc)) detectedCat = 'lamp';
+      else if (/\b(rug|carpet|floor|tile|parquet|wood floor)\b/.test(desc)) detectedCat = 'floor';
+      else if (/\b(wall|panel|art|mirror|molding|wallpaper)\b/.test(desc)) detectedCat = 'wall';
+
+      if (detectedCat !== 'all') {
+        setSelectedCategory(detectedCat);
+      }
+
+      setLensDetectedSummary(data?.description || 'Matched similar furniture pieces from showroom catalog');
+
+      const stopWords = new Set(['the', 'and', 'with', 'for', 'this', 'that', 'from', 'into', 'exact', 'shown', 'photo', 'reference', 'furniture', 'piece']);
+      const tokens = desc
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length >= 3 && !stopWords.has(w));
+
+      const nextScores = {};
+      catalog.forEach((item) => {
+        let score = 0;
+        const itemText = `${item.name || ''} ${item.category || ''} ${item.material || ''} ${item.prompt || ''} ${item.color || ''}`.toLowerCase();
+        if (detectedCat !== 'all' && item.category === detectedCat) score += 55;
+        tokens.forEach((tok) => {
+          if (itemText.includes(tok)) score += 8;
+        });
+        nextScores[item.id] = Math.min(98, Math.max(detectedCat !== 'all' && item.category === detectedCat ? 82 : 64, 60 + score));
+      });
+      setLensScoreMap(nextScores);
+    } catch (e) {
+      console.warn('Catalog lens search error:', e);
+      setLensDetectedSummary('Matched similar furniture pieces from showroom catalog');
+    } finally {
+      setIsLensScanning(false);
+    }
+  };
+
   let filtered = catalog.filter((item) => {
     const matchesCat = selectedCategory === 'all' || item.category === selectedCategory;
     const matchesStore = selectedStore === 'all' || item.storeId === selectedStore;
@@ -62,7 +120,9 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
     return matchesCat && matchesStore && matchesSearch;
   });
 
-  if (sortOrder === 'price-asc') {
+  if (lensSnappedPhoto && Object.keys(lensScoreMap).length > 0) {
+    filtered.sort((a, b) => (lensScoreMap[b.id] || 0) - (lensScoreMap[a.id] || 0));
+  } else if (sortOrder === 'price-asc') {
     filtered.sort((a, b) => a.price - b.price);
   } else if (sortOrder === 'price-desc') {
     filtered.sort((a, b) => b.price - a.price);
@@ -97,16 +157,48 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
 
         {/* Filter Controls Bar */}
         <div className="mt-8 flex flex-col sm:flex-row gap-3 items-center justify-between">
-          {/* Search Box */}
-          <div className="relative w-full sm:w-80">
+          {/* Search Box with Upload & In-App FurniPeek Lens Camera Icons */}
+          <div className="relative w-full sm:w-80 flex items-center">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               type="text"
-              placeholder="Search by name, fabric, marble, wood..."
+              placeholder="Search or upload/snap furniture..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 shadow-sm"
+              className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl pl-9 pr-16 py-2.5 text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500/20 shadow-sm"
             />
+            <div className="absolute right-2 flex items-center gap-1">
+              <label
+                title="FurniPeek Lens: Upload furniture photo to find similar catalog items"
+                aria-label="Upload furniture photo to search catalog"
+                className="w-7 h-7 rounded-lg bg-stone-100 dark:bg-stone-800 border border-[#c59b63]/50 text-[#9c733b] dark:text-[#d9b37c] hover:bg-[#fbf8f3] flex items-center justify-center shadow-sm transition-all active:scale-95 cursor-pointer"
+              >
+                <Upload size={12} strokeWidth={2.2} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => handleLensCapture(ev.target.result);
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setIsLensCameraOpen(true)}
+                title="FurniPeek Lens: Snap furniture to find similar catalog items"
+                aria-label="Snap furniture to search catalog"
+                className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#c59b63] to-[#a67c46] hover:from-[#b88d55] hover:to-[#966d3a] text-white flex items-center justify-center shadow-sm transition-all active:scale-95"
+              >
+                <Camera size={13} strokeWidth={2.2} />
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
@@ -136,6 +228,40 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
             </select>
           </div>
         </div>
+
+        {/* Active FurniPeek Lens Visual Search Banner */}
+        {lensSnappedPhoto && (
+          <div className="mt-4 p-3 rounded-2xl bg-[#fbf8f3] dark:bg-stone-900 border border-[#c59b63]/50 flex items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <img
+                src={lensSnappedPhoto}
+                alt="Snapped Furniture"
+                className="w-11 h-11 rounded-xl object-cover border border-[#c59b63]/40 shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-[#8c6430] dark:text-[#d9b37c] flex items-center gap-1.5">
+                  <Sparkles size={13} className="text-[#c59b63]" />
+                  <span>{isLensScanning ? 'FurniPeek Lens Scanning...' : 'FurniPeek Lens Visual Match Active'}</span>
+                </div>
+                <p className="text-xs text-stone-600 dark:text-stone-400 truncate mt-0.5">
+                  {lensDetectedSummary}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setLensSnappedPhoto(null);
+                setLensScoreMap({});
+                setSelectedCategory('all');
+              }}
+              className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-600 dark:text-stone-300 hover:text-rose-500 flex items-center gap-1 shrink-0"
+            >
+              <X size={13} />
+              <span>Clear</span>
+            </button>
+          </div>
+        )}
 
         {/* Category Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto pt-4 pb-1">
@@ -258,6 +384,17 @@ export default function StoreCatalogPage({ onSelectCatalogItem, onNavigate }) {
           </div>
         )}
       </section>
+
+      <CameraCaptureModal
+        isOpen={isLensCameraOpen}
+        onClose={() => setIsLensCameraOpen(false)}
+        title="FurniPeek Lens — Visual Furniture Search"
+        subtitle="Snap any furniture in the showroom to find similar catalog pieces"
+        snapButtonLabel="Snap Furniture"
+        confirmButtonLabel="Find Similar Furniture"
+        frameHint="Center the sofa, chair, table, or lamp inside the lens frame"
+        onPhotoCaptured={handleLensCapture}
+      />
     </div>
   );
 }

@@ -1,7 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, X, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
+import { Camera, X, RefreshCw, CheckCircle, AlertCircle, Upload } from 'lucide-react';
 
-export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured }) {
+export default function CameraCaptureModal({
+  isOpen,
+  onClose,
+  onPhotoCaptured,
+  title = 'Live Room Camera',
+  subtitle = 'Snap your real room or furniture in flight to stage instantly',
+  snapButtonLabel = 'Snap Room Photo',
+  confirmButtonLabel = 'Stage This Photo in Studio',
+  frameHint = 'Align your room or furniture piece inside the frame'
+}) {
   const [stream, setStream] = useState(null);
   const [capturedPhoto, setCapturedPhoto] = useState(null);
   const [facingMode, setFacingMode] = useState('environment'); // 'environment' (back) or 'user' (selfie)
@@ -92,8 +101,8 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
               <Camera size={20} />
             </div>
             <div>
-              <h3 className="font-extrabold text-base text-stone-900 dark:text-stone-100 font-serif">Live Room Camera</h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400">Snap your real room or furniture in flight to stage instantly</p>
+              <h3 className="font-extrabold text-base text-stone-900 dark:text-stone-100 font-serif">{title}</h3>
+              <p className="text-xs text-stone-500 dark:text-stone-400">{subtitle}</p>
             </div>
           </div>
           <button
@@ -141,7 +150,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
                 <div className="w-16 h-16 border-2 border-brand-400/40 rounded-xl" />
               </div>
               <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-[11px] text-stone-200">
-                Align your room or furniture piece inside the frame
+                {frameHint}
               </div>
             </div>
           )}
@@ -163,13 +172,35 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
               <button
                 onClick={takeSnapshot}
                 disabled={!!cameraError}
-                className="px-8 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-extrabold text-sm shadow-lg shadow-brand-500/25 flex items-center gap-2 transition-all transform active:scale-95 disabled:opacity-50"
+                className="px-6 sm:px-8 py-3 rounded-2xl bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-brand-500/25 flex items-center gap-2 transition-all transform active:scale-95 disabled:opacity-50"
               >
                 <Camera size={18} />
-                <span>Snap Room Photo</span>
+                <span>{snapButtonLabel}</span>
               </button>
 
-              <div className="w-20" />
+              <label
+                className="px-3.5 py-2.5 rounded-xl bg-white hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold flex items-center gap-1.5 border border-stone-200 dark:border-stone-700 shadow-sm transition-colors cursor-pointer"
+                title="Or upload a furniture photo from gallery"
+              >
+                <Upload size={14} className="text-[#b0854b]" />
+                <span>Upload</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        setCapturedPhoto(ev.target.result);
+                        stopCamera();
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
             </>
           ) : (
             <>
@@ -186,7 +217,7 @@ export default function CameraCaptureModal({ isOpen, onClose, onPhotoCaptured })
                 className="px-8 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/25 flex items-center gap-2 transition-all transform active:scale-95"
               >
                 <CheckCircle size={18} />
-                <span>Stage This Photo in Studio</span>
+                <span>{confirmButtonLabel}</span>
               </button>
             </>
           )}

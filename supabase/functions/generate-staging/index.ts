@@ -5,78 +5,105 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-replicate-key",
 };
 
-function buildStagingPrompt({ pinInfo, allPins = [], prompt, referenceDescription, activeOption, hasReferenceImage, targetAspectRatio = "3:2" }: any) {
+function buildStagingPrompt({
+  pinInfo,
+  allPins = [],
+  prompt,
+  referenceDescription,
+  activeOption,
+  hasReferenceImage,
+  targetAspectRatio = "3:2",
+  fabricSpec = "",
+  furnitureTypeSpec = "",
+  hasFabricSwatchImage = false,
+  isFluxModel = true,
+}: any) {
   const pinName = pinInfo?.name || "furniture piece";
   const category = (pinInfo?.category || "sofa").toLowerCase();
-  const x = Number(pinInfo?.x || 50);
-  const y = Number(pinInfo?.y || 50);
+  const x = Math.round(Number(pinInfo?.x || 50));
+  const y = Math.round(Number(pinInfo?.y || 50));
+  const boxW = Math.round(Number(pinInfo?.boxW || 45));
+  const boxH = Math.round(Number(pinInfo?.boxH || 35));
 
-  let positionDesc = `in the central area of the room (around ${x}% from left, ${y}% from top)`;
-  let sideDesc = "central area";
-  if (x >= 60) {
-    positionDesc = `situated on the right side of the room (around ${x}% from left, ${y}% from top, in front of the window)`;
-    sideDesc = "right side";
-  } else if (x <= 40) {
-    positionDesc = `situated on the left side of the room (around ${x}% from left, ${y}% from top)`;
-    sideDesc = "left side";
-  }
+  const positionDesc = `centered at approximately ${x}% horizontal, ${y}% vertical (bounding area roughly ${boxW}% width × ${boxH}% height of Image 1)`;
 
   const otherItems = Array.isArray(allPins) ? allPins.filter((p: any) => p.id !== pinInfo?.id) : [];
-  const chairPins = otherItems.filter((p: any) => p.category === "chair" || (p.name && p.name.toLowerCase().includes("chair")));
+  const otherItemsNames = otherItems.map((p: any) => p.name).filter(Boolean);
+  const preservedItemsText = otherItemsNames.length > 0
+    ? `Strictly keep all existing non-target elements in Image 1 identical: ${otherItemsNames.join(", ")}.`
+    : "Strictly preserve all other furniture, decor, and architectural elements in Image 1.";
 
-  let chairProtectionText = "the non-target chairs in the room must be preserved in their exact original form";
-  if (chairPins.length > 0) {
-    const chairNames = chairPins.map((c: any) => c.name).join(", ");
-    chairProtectionText = `${chairNames} must be preserved in their exact original form and position`;
+  let customDirectives = "";
+  if (furnitureTypeSpec) {
+    customDirectives += `- FURNITURE SILHOUETTE / TYPE: Render the replacement piece specifically as a ${furnitureTypeSpec}.\n`;
   }
+  if (fabricSpec) {
+    customDirectives += `- UPHOLSTERY FABRIC & MATERIAL FINISH: Upholster the piece in ${fabricSpec}.\n`;
+  }
+  if (hasFabricSwatchImage) {
+    customDirectives += `- CUSTOM FABRIC SWATCH: Apply the exact material texture, pattern weave, and color tone from the attached fabric swatch image onto the furniture upholstery.\n`;
+  }
+  const customFabricAndTypeDirective = customDirectives ? `\nCUSTOM FABRIC & FURNITURE TYPE SPECIFICATION:\n${customDirectives}` : "";
 
   if (hasReferenceImage || activeOption === "C") {
     const hasSpec = Boolean(referenceDescription && referenceDescription.trim().length > 0);
     const refSpec = hasSpec
       ? referenceDescription.trim()
-      : (prompt && !prompt.includes("exact architectural") ? prompt : "the exact architectural furniture shown in Image 2");
+      : (prompt && !prompt.includes("exact architectural") ? prompt : "the exact furniture shown in Image 2");
 
     const cushionDirective = hasSpec
-      ? `- CUSHION COUNT & SECTION DIVISION: The replacement furniture in Image 1 must adopt the exact cushion division, seat sections, and silhouette of Image 2. If Image 2 shows a 2-seater / loveseat with exactly two cushions, the replacement in Image 1 must be rendered with strictly two cushions and two seat sections.\n`
+      ? `- CUSHION COUNT & DIVISION: The replacement furniture in Image 1 must adopt the exact cushion division and seating silhouette of Image 2.\n`
       : "";
 
-    return `Task: Surgical architectural furniture replacement in Image 1.
+    const materialLine = (fabricSpec || hasFabricSwatchImage)
+      ? `- MATERIAL CUSTOMIZATION: Keep the structural form of Image 2 while applying the custom upholstery: ${fabricSpec || "custom fabric swatch"}.`
+      : `- MATERIAL & COLOR FIDELITY: Replicate the exact upholstery texture, material weave, color hue, armrest shape, and base legs shown in Image 2.`;
 
-TARGET OBJECT TO REPLACE:
-- In Image 1, replace ONLY the ${pinName} ${positionDesc}.
-- Remove the existing item's geometry and replace it completely.
+    return `Task: Surgical in-room furniture replacement.
 
-NEW FURNITURE SPECIFICATION (FROM IMAGE 2):
-- Insert the exact furniture piece shown in Image 2 into the target ${category} position on the ${sideDesc} of Image 1.
-- Detailed reference specification: ${refSpec}.
-${cushionDirective}- MATERIAL & COLOR FIDELITY: Replicate the exact upholstery material (fabric weave, velvet, leather, or bouclé), color hue, texture, stitching details, armrest shape, and base legs shown in Image 2.
+PRIMARY INPUT:
+- Image 1 is the user's authentic room photograph.
+- Image 2 is the reference furniture photograph to insert into Image 1.
 
-PRESERVATION OF EXISTING ROOM & FLAT ASPECT RATIO:
-- Strictly preserve Image 1's (the flat/room photo's) exact camera framing, orientation, and ${targetAspectRatio} aspect ratio. Do NOT adopt the aspect ratio, cropping, or resolution of Image 2 (the furniture reference photo).
-- Preserve all existing non-target furniture in Image 1 in their original state.
-- Specifically: ${chairProtectionText}.
-- Preserve the center coffee table, patterned floor rug, credenza/sideboard, framed wall photos, indoor plants, windows, walls, and flooring exactly as shown in Image 1.
-- Confine all modifications strictly and exclusively to the target ${category} zone on the ${sideDesc}.
+STRICT ROOM PRESERVATION MANDATE:
+- Image 1 is the REAL ROOM ENVIRONMENT. You MUST preserve the exact room in Image 1: identical architectural layout, walls, paint finish, flooring, ceiling, light fixtures/chandeliers, windows, doors, and camera perspective.
+- Do NOT alter any part of the room outside the designated furniture position.
+- Do NOT hallucinate or add new architectural features, windows, rugs, or walls that do not exist in Image 1.
+- ${preservedItemsText}
+- All modifications must be STRICTLY and EXCLUSIVELY confined to the target ${category} bounding zone (${positionDesc}).
 
-PERSPECTIVE & LIGHTING:
-- Position the new furniture naturally on the floor rug with realistic ambient contact shadows and daylight illumination matching the window on the right.`;
+REPLACEMENT SPECIFICATION:
+- In Image 1, remove ONLY the existing ${pinName} at ${positionDesc}.
+- Insert the new furniture piece based on Image 2: ${refSpec}.
+${cushionDirective}${materialLine}${customFabricAndTypeDirective}
+
+LIGHTING & PERSPECTIVE INTEGRATION:
+- Seamlessly integrate the new furniture into Image 1 using Image 1's existing ambient room lighting, color temperature, and realistic floor contact shadows.
+- Strictly preserve Image 1's exact camera framing, orientation, and perspective.`;
   }
 
-  return `Task: Architectural furniture replacement in Image 1.
+  // Text-based, catalog prompt, or Type & Fabric staging (Option B or D)
+  const furnitureDescription = prompt || (furnitureTypeSpec ? `${furnitureTypeSpec} upholstered in ${fabricSpec || "designer fabric"}` : pinName);
 
-TARGET OBJECT TO REPLACE:
-- In Image 1, replace ONLY the ${pinName} ${positionDesc}.
-- Replace with: ${prompt}.
+  return `Task: Surgical in-room furniture placement.
 
-PRESERVATION OF EXISTING ROOM & FLAT ASPECT RATIO:
-- Strictly preserve Image 1's (the flat/room photo's) exact camera framing, orientation, and ${targetAspectRatio} aspect ratio.
-- Preserve all existing non-target furniture in Image 1 in their original state.
-- Specifically: ${chairProtectionText}.
-- The center coffee table, rug, credenza/sideboard, gallery wall, plants, and windows must remain completely preserved.
-- Confine changes strictly to the target ${pinName} on the ${sideDesc}.
+PRIMARY INPUT:
+- Image 1 is the user's authentic room photograph.
 
-PERSPECTIVE & LIGHTING:
-- Match Image 1's 3D perspective, realistic floor contact shadows, and ambient daylight illumination.`;
+STRICT ROOM PRESERVATION MANDATE:
+- Image 1 is the REAL ROOM ENVIRONMENT. You MUST preserve the exact room in Image 1: identical architectural layout, walls, paint finish, flooring, ceiling, light fixtures/chandeliers, windows, doors, and camera perspective.
+- Do NOT alter any part of the room outside the designated furniture position.
+- Do NOT hallucinate or add new architectural features, windows, rugs, or walls that do not exist in Image 1.
+- ${preservedItemsText}
+- All modifications must be STRICTLY and EXCLUSIVELY confined to the target ${pinName} bounding zone (${positionDesc}).
+
+TARGET ITEM REPLACEMENT:
+- In Image 1, replace ONLY the ${pinName} at ${positionDesc}.
+- Replace with: ${furnitureDescription}.${customFabricAndTypeDirective}
+
+LIGHTING & PERSPECTIVE INTEGRATION:
+- Seamlessly integrate the new furniture into Image 1 using Image 1's existing ambient room lighting, color temperature, and realistic floor contact shadows.
+- Strictly preserve Image 1's exact camera framing, orientation, and perspective.`;
 }
 
 serve(async (req) => {
@@ -92,6 +119,10 @@ serve(async (req) => {
       roomImage,
       referenceImage,
       catalogImageUrl,
+      fabricSwatchImage,
+      fabricSpec = "",
+      furnitureTypeSpec = "",
+      useFluxKlein = true,
       pinInfo,
       allPins = [],
       referenceDescription = "",
@@ -123,7 +154,9 @@ serve(async (req) => {
       });
     }
 
-    const modelIdentifier = "google/nano-banana-pro";
+    // Default to black-forest-labs/flux-2-klein-4b unless explicitly disabled
+    const isFluxModel = useFluxKlein !== false;
+    const modelIdentifier = isFluxModel ? "black-forest-labs/flux-2-klein-4b" : "google/nano-banana-pro";
     const images: string[] = [];
 
     if (roomImage) {
@@ -145,8 +178,14 @@ serve(async (req) => {
       images.push(catalogImageUrl);
     }
 
-    // Determine exact Nano Banana Pro aspect_ratio strictly from the flat/room image ("1:1", "2:3", or "3:2")
-    // Never use "match_input_image" when multiple images are passed, as Image 2 (furniture ref) can override Image 1 (flat)
+    if (fabricSwatchImage) {
+      const formattedSwatch = fabricSwatchImage.startsWith("data:") || fabricSwatchImage.startsWith("http")
+        ? fabricSwatchImage
+        : `data:image/jpeg;base64,${fabricSwatchImage}`;
+      images.push(formattedSwatch);
+    }
+
+    // Determine exact aspect_ratio strictly from the flat/room image ("1:1", "2:3", or "3:2")
     const allowedRatios = ["1:1", "2:3", "3:2"];
     let targetAspectRatio = "3:2";
     if (aspectRatio && allowedRatios.includes(aspectRatio)) {
@@ -167,17 +206,31 @@ serve(async (req) => {
       activeOption,
       hasReferenceImage: hasReference,
       targetAspectRatio,
+      fabricSpec,
+      furnitureTypeSpec,
+      hasFabricSwatchImage: Boolean(fabricSwatchImage),
+      isFluxModel,
     });
 
-    const inputPayload = {
-      prompt: stagingPrompt,
-      image_input: images,
-      aspect_ratio: targetAspectRatio,
-      resolution: targetResolution,
-      output_format: "jpg",
-      safety_filter_level: "block_only_high",
-      allow_fallback_model: true,
-    };
+    const inputPayload = isFluxModel
+      ? {
+          prompt: stagingPrompt,
+          images: images,
+          aspect_ratio: targetAspectRatio,
+          output_megapixels: "1",
+          output_format: "jpg",
+          output_quality: 95,
+          go_fast: true,
+        }
+      : {
+          prompt: stagingPrompt,
+          image_input: images,
+          aspect_ratio: targetAspectRatio,
+          resolution: targetResolution,
+          output_format: "jpg",
+          safety_filter_level: "block_only_high",
+          allow_fallback_model: true,
+        };
 
     let repResponse = await fetch(`https://api.replicate.com/v1/models/${modelIdentifier}/predictions`, {
       method: "POST",
@@ -245,7 +298,7 @@ serve(async (req) => {
     }
 
     throw new Error(prediction.error || "Image staging generation timed out");
-  } catch (err) {
+  } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
